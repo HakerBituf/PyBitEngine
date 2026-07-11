@@ -522,11 +522,12 @@ class WINDOW(DRAW):
                 # zero GPU, ed evita di "sforare" il target dormendo troppo).
                 if self._frame_duration > 0.0:
                     target_end = now + self._frame_duration
-                    remaining  = target_end - time.perf_counter()
+                    remaining = target_end - time.perf_counter()
                     if remaining > 0.001:
-                        time.sleep(remaining - 0.001)
-                    while time.perf_counter() < target_end:
-                        pass
+                        time.sleep(max(0.0, remaining - 0.001))
+                    if remaining > 0.0:
+                        while time.perf_counter() < target_end:
+                            pass
 
                 # --- GC manuale ---
                 if self._gc_auto:

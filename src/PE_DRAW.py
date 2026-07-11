@@ -251,11 +251,15 @@ class FontManager:
         self._cache = OrderedDict()
         self._capacity = capacity
         self._registered = {}
+        self._resolve_cache = {}
+        self._font_file_index = {}
+        self._font_dirs = [base for base in self._SYSTEM_DIRS if os.path.isdir(base)]
 
     def register(self, alias: str, path: str):
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Font non trovato: {path}")
         self._registered[alias] = path
+        self._resolve_cache[alias.lower()] = path
 
     def get(self, family: str, size: int):
         if size <= 0:
@@ -276,22 +280,50 @@ class FontManager:
             c.popitem(last=False)
         return font
 
-    def _resolve(self, family: str) -> str:
-        if family in self._registered:
-            return self._registered[family]
-        if os.path.isfile(family):
-            return family
-        target = family.lower()
-        for base in self._SYSTEM_DIRS:
-            if not os.path.isdir(base):
+    def _build_font_file_index(self):
+        index = {}
+        for base in self._font_dirs:
+            if base in index:
                 continue
+            font_files = []
             for root, _, files in os.walk(base):
-                for f in files:
-                    lf = f.lower()
-                    if lf.endswith((".ttf", ".otf")) and target in lf:
-                        return os.path.join(root, f)
+                for file_name in files:
+                    lowered = file_name.lower()
+                    if lowered.endswith((".ttf", ".otf")):
+                        font_files.append(os.path.join(root, file_name))
+            index[base] = font_files
+        self._font_file_index = index
+        return index
+
+    def _resolve(self, family: str) -> str:
+        normalized = family.lower()
+        cached = self._resolve_cache.get(normalized)
+        if cached is not None:
+            return cached
+
+        if family in self._registered:
+            resolved = self._registered[family]
+            self._resolve_cache[normalized] = resolved
+            return resolved
+        if os.path.isfile(family):
+            self._resolve_cache[normalized] = family
+            return family
+
+        if not self._font_file_index:
+            self._build_font_file_index()
+
+        for base in self._font_dirs:
+            font_files = self._font_file_index.get(base, [])
+            for path in font_files:
+                file_name = os.path.basename(path).lower()
+                if normalized in file_name:
+                    self._resolve_cache[normalized] = path
+                    return path
+
         default = ImageFont.load_default()
-        return getattr(default, "path", family)
+        resolved = getattr(default, "path", family)
+        self._resolve_cache[normalized] = resolved
+        return resolved
 
 
 class _GlyphAtlas:

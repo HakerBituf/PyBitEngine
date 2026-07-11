@@ -1,33 +1,62 @@
 # PyBitEngine ⚡
 
-**Motore grafico 2D GPU-accelerato per Python — basato su SDL2, ModernGL, NumPy e Numba.**
+[![Documentation](https://img.shields.io/badge/docs-online-brightgreen)](https://hakerbituf.github.io/PyBitEngine/)
+[![License](https://img.shields.io/badge/license-MPL--2.0-green)](https://github.com/HakerBituf/PyBitEngine/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-PyBitEngine è una libreria per sviluppatori che vogliono disegnare **migliaia di oggetti 2D** a 60 FPS, senza impazzire con OpenGL. 
-Usa rendering instanced sulla GPU, texture atlas, e kernel Numba per zero overhead a runtime.
+A GPU-accelerated 2D game engine for Python, built on SDL2, ModernGL, NumPy and Numba.
 
----
-
-## 📦 Versione: **0.1.0-alpha**
-
-API in evoluzione. Feedback e contributi sono benvenuti!
+PyBitEngine helps developers draw thousands of 2D objects efficiently while keeping the API simple. It uses instanced GPU rendering, texture atlases, and Numba kernels to reduce runtime overhead.
 
 ---
 
-## ✨ Cosa fa davvero (dal codice)
+## 📦 Version: 0.1.0
 
-- **Rendering GPU instanced** — una draw call per migliaia di rettangoli, linee, triangoli, ellissi o sprite
-- **Texture Atlas** — carica le immagini in un unico grande texture, con allocatore MaxRects
-- **Camera 2D** — due versioni: 
-  - `CameraGPU`: FBO offscreen + blit shader (zero overhead CPU, 1 draw call extra)
-  - `CameraCPU`: trasformazioni esplicite (controllo totale, debug)
-- **Font rendering** — TTF/OTF su texture atlas (Pillow + caching)
-- **Eventi SDL2** — tastiera, mouse, drag, scroll (tutti i tasti `PE_K_*`)
-- **Collisioni geometriche** — punto, rettangolo, triangolo, ellisse, cerchio, OBB (con SAT)
-- **Zero allocazioni a runtime** — buffer preallocati, Numba per il packing
+This release focuses on packaging readiness and runtime performance.
+
+### What is new in 0.1.0
+- Added a standalone packaging helper via `pack()` for exporting games with cx_Freeze.
+- Bundles runtime files and license notices into the output folder.
+- Improved public imports so `from PyBitEngine import *` works cleanly.
+- Reduced overhead in font resolution and text layout paths.
+- Tightened frame pacing to avoid unnecessary CPU/GPU saturation.
 
 ---
 
-## 🚀 Installazione
+## ✨ Highlights
+
+- Instanced GPU rendering for rectangles, lines, triangles, ellipses and sprites.
+- Texture atlas packing with MaxRects allocation.
+- 2D camera support with CPU and GPU-backed variants.
+- Font rendering for TTF/OTF files with caching.
+- SDL2 input handling for keyboard, mouse, drag and wheel events.
+- Geometry helpers for points, rectangles, triangles, ellipses, circles and OBB collision checks.
+
+---
+
+## 🚀 Installation
 
 ```bash
-pip install PyBitEngine
+pip install pybitengine
+```
+
+## 🧪 Quick usage
+
+```python
+from PyBitEngine import WINDOW
+
+window = WINDOW(title="PyBitEngine", geometry=("center", "center", 800, 600))
+window.Loop()
+```
+
+## 📦 Packaging a game
+
+```python
+from PyBitEngine import pack
+
+pack("main.py", name="MyGame", output_dir="dist")
+```
+
+## 📝 Notes
+
+PyBitEngine is still evolving, but the core rendering and packaging APIs are now more stable and more suitable for real projects.
