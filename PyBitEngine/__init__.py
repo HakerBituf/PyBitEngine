@@ -5,12 +5,12 @@ from . import PE_KEYS as _PE_KEYS
 from .PE_PAKER import pack
 from .PE_WINDOW import WINDOW
 
+
 __all__ = [
     "WINDOW",
     "DRAW",
     "CameraGPU",
     "CameraCPU",
     "FontManager",
-    "pack",
-]
+    "pack"]
 __all__.extend(_PE_KEYS.__all__)

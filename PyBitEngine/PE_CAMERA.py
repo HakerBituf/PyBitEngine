@@ -56,12 +56,59 @@ import math
 import numpy as np
 import moderngl
 
+# Numba è opzionale: se assente, fallback puro-NumPy (già rapido su N grandi).
+try:
+    from numba import njit  # type: ignore
+    _HAS_NUMBA = True
+except Exception:  # pragma: no cover
+    _HAS_NUMBA = False
+    def njit(*a, **kw):  # noqa: D401
+        def _wrap(fn): return fn
+        return _wrap if not a or not callable(a[0]) else a[0]
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Costanti interne
 # ──────────────────────────────────────────────────────────────────────────────
 _ZOOM_MIN = 0.01
 _ZOOM_MAX = 64.0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Frustum / AABB culling — kernel Numba (fallback NumPy se numba assente)
+# ──────────────────────────────────────────────────────────────────────────────
+@njit(fastmath=True, cache=True)
+def _numba_cull_aabb(rects, cam_x, cam_y, vw, vh, out):
+    """
+    rects: (N,4) float32 [wx, wy, ww, wh]  →  out: (N,) uint8 mask (0/1).
+    Test AABB-vs-AABB standard: visibile se i due rettangoli si sovrappongono.
+    Chiamato UNA volta per frame su tutte le entità del mondo: la GPU riceverà
+    poi solo ciò che è effettivamente dentro (o a filo) del frustum 2D.
+    """
+    n = rects.shape[0]
+    cx2 = cam_x + vw
+    cy2 = cam_y + vh
+    for i in range(n):
+        x = rects[i, 0]
+        y = rects[i, 1]
+        w = rects[i, 2]
+        h = rects[i, 3]
+        vis = (x + w >= cam_x) and (x <= cx2) and (y + h >= cam_y) and (y <= cy2)
+        out[i] = 1 if vis else 0
+
+
+def _cull_aabb_numpy(rects, cam_x, cam_y, vw, vh):
+    """Fallback vettoriale NumPy (usato quando numba non è disponibile)."""
+    r = np.asarray(rects, dtype="f4")
+    cx2 = cam_x + vw
+    cy2 = cam_y + vh
+    m = (
+        (r[:, 0] + r[:, 2] >= cam_x) &
+        (r[:, 0] <= cx2) &
+        (r[:, 1] + r[:, 3] >= cam_y) &
+        (r[:, 1] <= cy2)
+    )
+    return m.astype(np.uint8)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -339,13 +386,12 @@ class CameraGPU:
             self._shake_remaining = 0.0
 
     def _effective_position(self) -> tuple[float, float]:
-        """Ritorna la posizione della camera con lo shake applicato."""
         x, y = self._x, self._y
         if self._shake_remaining > 0.0 and self._shake_intensity > 0.0:
-            # Intensità che decade linearmente con il tempo rimanente
             factor = self._shake_remaining * self._shake_intensity
-            x += (2.0 * math.sin(self._shake_remaining * 97.3) - 1.0) * factor
-            y += (2.0 * math.cos(self._shake_remaining * 73.1) - 1.0) * factor
+            # FIX: media zero – senza il "- 1.0"
+            x += math.sin(self._shake_remaining * 97.3) * factor
+            y += math.cos(self._shake_remaining * 73.1) * factor
         return x, y
 
     def _apply_bounds(self):
@@ -488,6 +534,58 @@ class CameraGPU:
         sy = (wy - cy) * self._zoom
         return sx, sy
 
+    # ── Frustum culling (2D AABB) ─────────────────────────────────────────────
+    def is_visible(self, wx: float, wy: float,
+                   ww: float = 0.0, wh: float = 0.0,
+                   margin: float = 0.0) -> bool:
+        """
+        True se il rettangolo mondo (wx, wy, ww, wh) è (parzialmente) visibile
+        nella viewport corrente della CameraGPU. Usa `_effective_position()`
+        per essere coerente con il blit finale (incluso lo shake).
+        """
+        cx, cy = self._effective_position()
+        vw = self._size[0] / self._zoom + margin * 2.0
+        vh = self._size[1] / self._zoom + margin * 2.0
+        cam_x = cx - margin
+        cam_y = cy - margin
+        return (wx + ww >= cam_x and wx <= cam_x + vw and
+                wy + wh >= cam_y and wy <= cam_y + vh)
+
+    def is_visible_batch(self, rects: np.ndarray, margin: float = 0.0) -> np.ndarray:
+        """Maschera booleana NumPy (vettoriale) per un array (N,4) di rettangoli."""
+        r = np.asarray(rects, dtype="f4")
+        cx, cy = self._effective_position()
+        vw = self._size[0] / self._zoom + margin * 2.0
+        vh = self._size[1] / self._zoom + margin * 2.0
+        cam_x = cx - margin
+        cam_y = cy - margin
+        return (
+            (r[:, 0] + r[:, 2] >= cam_x) & (r[:, 0] <= cam_x + vw) &
+            (r[:, 1] + r[:, 3] >= cam_y) & (r[:, 1] <= cam_y + vh)
+        )
+
+    def is_visible_batch_numba(self, rects: np.ndarray,
+                               margin: float = 0.0,
+                               out: np.ndarray | None = None) -> np.ndarray:
+        """
+        Variante Numba-JIT del culling batch: ideale per N >> 10k.
+        Ritorna una maschera uint8 (0/1) — usabile come bool per l'indexing.
+        Se `out` è fornito (uint8, shape (N,)) viene riusato per zero-alloc.
+        """
+        r = np.asarray(rects, dtype="f4")
+        cx, cy = self._effective_position()
+        vw = self._size[0] / self._zoom + margin * 2.0
+        vh = self._size[1] / self._zoom + margin * 2.0
+        cam_x = cx - margin
+        cam_y = cy - margin
+        if _HAS_NUMBA:
+            if out is None or out.shape[0] != r.shape[0] or out.dtype != np.uint8:
+                out = np.empty(r.shape[0], dtype=np.uint8)
+            _numba_cull_aabb(r, np.float32(cam_x), np.float32(cam_y),
+                             np.float32(vw), np.float32(vh), out)
+            return out
+        return _cull_aabb_numpy(r, cam_x, cam_y, vw, vh)
+
     # ── Info ──────────────────────────────────────────────────────────────────
     @property
     def viewport_rect(self) -> tuple[float, float, float, float]:
@@ -599,11 +697,11 @@ class CameraCPU:
             self._shake_remaining = 0.0
 
     def _effective_offset(self) -> tuple[float, float]:
-        """Ritorna l'offset di shake corrente (0,0 se nessuno shake attivo)."""
         if self._shake_remaining > 0.0 and self._shake_intensity > 0.0:
             f = self._shake_remaining * self._shake_intensity
-            ox = (2.0 * math.sin(self._shake_remaining * 97.3) - 1.0) * f
-            oy = (2.0 * math.cos(self._shake_remaining * 73.1) - 1.0) * f
+            # FIX: media zero
+            ox = math.sin(self._shake_remaining * 97.3) * f
+            oy = math.cos(self._shake_remaining * 73.1) * f
             return ox, oy
         return 0.0, 0.0
 
@@ -898,6 +996,32 @@ class CameraCPU:
             (rects[:, 1] + rects[:, 3] >= cam_y) &
             (rects[:, 1] <= cam_y + vh)
         )
+
+    def is_visible_batch_numba(self, rects: np.ndarray,
+                               margin: float = 0.0,
+                               out: np.ndarray | None = None) -> np.ndarray:
+        """
+        Variante Numba-JIT del culling AABB (ideale per N >> 10k oggetti).
+        Ritorna una maschera uint8 (0/1) usabile come bool per l'indexing NumPy.
+        Se `out` è fornito e ha shape/dtype giusti viene riusato (zero-alloc).
+
+        Fallback automatico a NumPy se numba non è installato.
+        """
+        r = np.asarray(rects, dtype="f4")
+        w, h = self._draw.size
+        vw = w / self._zoom + margin * 2.0
+        vh = h / self._zoom + margin * 2.0
+        cam_x = self._x - margin
+        cam_y = self._y - margin
+        if _HAS_NUMBA:
+            if out is None or out.shape[0] != r.shape[0] or out.dtype != np.uint8:
+                out = np.empty(r.shape[0], dtype=np.uint8)
+            _numba_cull_aabb(r, np.float32(cam_x), np.float32(cam_y),
+                             np.float32(vw), np.float32(vh), out)
+            return out
+        return _cull_aabb_numpy(r, cam_x, cam_y, vw, vh)
+
+
 
     # ── Info ──────────────────────────────────────────────────────────────────
     @property

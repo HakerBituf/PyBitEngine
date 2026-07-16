@@ -5,7 +5,16 @@ import ctypes
 import warnings
 from math import hypot as _math_hypot
 from collections import OrderedDict
-from numba import njit, prange
+from numba import njit
+
+# Costanti tipo-evento/pulsante mouse, usate dai metodi PE_COLLISION di DRAW
+# (UpdateMouseState, MousePressed, MouseReleased, MouseHeld, MouseDragging...).
+# PE_KEYS non dipende da PE_DRAW (importa solo sdl2), quindi nessun import
+# circolare.
+from .PE_KEYS import (
+    PE_MOUSEMOTION, PE_MOUSEBUTTONDOWN, PE_MOUSEBUTTONUP,
+    PE_MOUSEDRAG, PE_MOUSEWHEEL, PE_MOUSE_LEFT,
+)
 
 # ---------------------------------------------------------------------- #
 # PE_TEXT — costanti precomputate riusate da tutto il modulo
@@ -28,11 +37,21 @@ except ImportError:
 # ---------------------------------------------------------------------- #
 # NUMBA KERNELS aggiuntivi (batch primitivi + testo)
 # ---------------------------------------------------------------------- #
-@njit(fastmath=True, parallel=True, cache=True)
+# PERF FIX: rimosso parallel=True/prange da questi kernel. Sono chiamati
+# UNA VOLTA PER FRAME per ogni Draw*Batch, con N tipico da poche decine a
+# poche migliaia di istanze, e fanno solo copie di pochi float per elemento
+# (nessun calcolo pesante): sono quindi puramente memory-bound. Con
+# parallel=True, ogni chiamata paga il costo fisso di dispatch/join del
+# thread pool di Numba (decine di microsecondi), che per questi carichi
+# tipici e' piu' grande del tempo risparmiato parallelizzando una manciata
+# di assegnazioni: il risultato netto era un rallentamento per-frame, non
+# un'accelerazione. Kernel sequenziale + cache=True (compilato una sola
+# volta, poi sempre veloce) e' la scelta giusta qui.
+@njit(fastmath=True, cache=True)
 def _numba_pack_rect_instances(pos, size, cos_a, sin_a, rgba, out):
     """Impacchetta (N,10) instance buffer per DrawRectsBatch: pos2+size2+dir2+rgba4."""
     n = pos.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = pos[i, 0]
         out[i, 1] = pos[i, 1]
         out[i, 2] = size[i, 0]
@@ -45,10 +64,10 @@ def _numba_pack_rect_instances(pos, size, cos_a, sin_a, rgba, out):
         out[i, 9] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_ellipse_instances(centers, radii, cos_a, sin_a, rgba, out):
     n = centers.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = centers[i, 0]
         out[i, 1] = centers[i, 1]
         out[i, 2] = radii[i, 0]
@@ -61,14 +80,14 @@ def _numba_pack_ellipse_instances(centers, radii, cos_a, sin_a, rgba, out):
         out[i, 9] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_ellipse_outline_instances(centers, radii, thickness, cos_a, sin_a, rgba, out):
     """Impacchetta (N,11) instance buffer per DrawEllipsesOutlineBatch/
     DrawCircleOutlineBatch: center2+radius2+thickness1+dir2+rgba4.
     Stessa architettura/prestazioni di _numba_pack_ellipse_instances
-    (kernel Numba parallelo, zero overhead Python per istanza)."""
+    (kernel Numba compilato, zero overhead Python per istanza)."""
     n = centers.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = centers[i, 0]
         out[i, 1] = centers[i, 1]
         out[i, 2] = radii[i, 0]
@@ -82,13 +101,13 @@ def _numba_pack_ellipse_outline_instances(centers, radii, thickness, cos_a, sin_
         out[i, 10] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_rect_outline_instances(pos, size, thickness, cos_a, sin_a, rgba, out):
     """Impacchetta (N,11) instance buffer per DrawRectsOutlineBatch:
     pos2+size2+thickness1+dir2+rgba4. Stessa architettura/prestazioni di
     _numba_pack_rect_instances."""
     n = pos.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = pos[i, 0]
         out[i, 1] = pos[i, 1]
         out[i, 2] = size[i, 0]
@@ -102,10 +121,10 @@ def _numba_pack_rect_outline_instances(pos, size, thickness, cos_a, sin_a, rgba,
         out[i, 10] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_line_instances(p1, p2, thick, rgba, out):
     n = p1.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = p1[i, 0]
         out[i, 1] = p1[i, 1]
         out[i, 2] = p2[i, 0]
@@ -117,10 +136,10 @@ def _numba_pack_line_instances(p1, p2, thick, rgba, out):
         out[i, 8] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_tri_instances(v0, v1, v2, rgba, out):
     n = v0.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = v0[i, 0]; out[i, 1] = v0[i, 1]
         out[i, 2] = v1[i, 0]; out[i, 3] = v1[i, 1]
         out[i, 4] = v2[i, 0]; out[i, 5] = v2[i, 1]
@@ -128,11 +147,11 @@ def _numba_pack_tri_instances(v0, v1, v2, rgba, out):
         out[i, 8] = rgba[i, 2]; out[i, 9] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_rotate_lines(x1, y1, x2, y2, cs, sn):
     """Ruota N segmenti attorno al proprio punto medio (in-place style)."""
     n = x1.shape[0]
-    for i in prange(n):
+    for i in range(n):
         mx = (x1[i] + x2[i]) * 0.5
         my = (y1[i] + y2[i]) * 0.5
         dx1 = x1[i] - mx; dy1 = y1[i] - my
@@ -144,11 +163,11 @@ def _numba_rotate_lines(x1, y1, x2, y2, cs, sn):
 
 # INCOERENZA FIX 10 + PERF FIX 18: rotate-per-line con angoli per-segmento e
 # pack che accetta x/y separati (niente column_stack di appoggio).
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_rotate_lines_arr(x1, y1, x2, y2, cs_arr, sn_arr):
     """Ruota N segmenti attorno al proprio punto medio, angolo per segmento."""
     n = x1.shape[0]
-    for i in prange(n):
+    for i in range(n):
         mx = (x1[i] + x2[i]) * 0.5
         my = (y1[i] + y2[i]) * 0.5
         dx1 = x1[i] - mx; dy1 = y1[i] - my
@@ -160,12 +179,12 @@ def _numba_rotate_lines_arr(x1, y1, x2, y2, cs_arr, sn_arr):
         y2[i] = my + dx2*sn + dy2*cs
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_line_instances_xy(x1, y1, x2, y2, thick, rgba, out):
     """Come _numba_pack_line_instances ma legge x/y da 4 array 1D
     (evita np.column_stack: risparmia 2 allocazioni (N,2) per chiamata)."""
     n = x1.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i, 0] = x1[i]
         out[i, 1] = y1[i]
         out[i, 2] = x2[i]
@@ -178,14 +197,14 @@ def _numba_pack_line_instances_xy(x1, y1, x2, y2, thick, rgba, out):
 
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_clip_rgba(rgba_in, alpha_scalar, use_alpha_scalar, alpha_arr, out):
     """
     Normalizza colori: clip 0-255 e sovrascrittura alpha.
     use_alpha_scalar=1 usa alpha_scalar; altrimenti usa alpha_arr (len=n).
     """
     n = rgba_in.shape[0]
-    for i in prange(n):
+    for i in range(n):
         r = rgba_in[i, 0]
         g = rgba_in[i, 1]
         b = rgba_in[i, 2]
@@ -208,14 +227,14 @@ def _numba_clip_rgba(rgba_in, alpha_scalar, use_alpha_scalar, alpha_arr, out):
         out[i, 3] = a
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_layout_glyphs(gx, gy, gw, gh, guv,
                          origin_x, origin_y, cos_r, sin_r,
                          r_final, g_final, b_final, a_final, out):
     """Layout+rotazione+packing dei glifi per DrawTextBatch.
     Output (N,14): pos2+size2+dir2+uv4+rgba4 — stesso layout dello sprite batch."""
     n = gx.shape[0]
-    for i in prange(n):
+    for i in range(n):
         lx = gx[i]
         ly = gy[i]
         wx = origin_x + lx * cos_r - ly * sin_r
@@ -238,13 +257,13 @@ def _numba_layout_glyphs(gx, gy, gw, gh, guv,
 
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_rrect_instances(pos, size, radius, cos_a, sin_a, rgba, out):
     """Impacchetta (N,11) instance buffer per DrawRoundedRectsBatch:
-    pos2+size2+radius1+dir2+rgba4. Stessa architettura Numba-parallel
-    di _numba_pack_rect_instances."""
+    pos2+size2+radius1+dir2+rgba4. Stessa architettura Numba compilata
+    (sequenziale, cache=True) di _numba_pack_rect_instances."""
     n = pos.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i,  0] = pos[i, 0]
         out[i,  1] = pos[i, 1]
         out[i,  2] = size[i, 0]
@@ -258,13 +277,13 @@ def _numba_pack_rrect_instances(pos, size, radius, cos_a, sin_a, rgba, out):
         out[i, 10] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_rrect_outline_instances(pos, size, radius, thickness,
                                         cos_a, sin_a, rgba, out):
     """Impacchetta (N,12) instance buffer per DrawRoundedRectsOutlineBatch:
     pos2+size2+radius1+thickness1+dir2+rgba4."""
     n = pos.shape[0]
-    for i in prange(n):
+    for i in range(n):
         out[i,  0] = pos[i, 0]
         out[i,  1] = pos[i, 1]
         out[i,  2] = size[i, 0]
@@ -352,12 +371,12 @@ def _rtri_shrink_and_aabb(ax, ay, bx, by, cx, cy, r):
             min_x - pad, min_y - pad, max_x + pad, max_y + pad)
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_rtri_instances(v0, v1, v2, radius, rgba, out):
     """Impacchetta (N,15) instance buffer per DrawRoundedTrianglesBatch:
     shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+rgba(4)."""
     n = v0.shape[0]
-    for i in prange(n):
+    for i in range(n):
         (sax, say, sbx, sby, scx, scy, r_eff,
          mnx, mny, mxx, mxy) = _rtri_shrink_and_aabb(
             v0[i, 0], v0[i, 1],
@@ -376,12 +395,12 @@ def _numba_pack_rtri_instances(v0, v1, v2, radius, rgba, out):
         out[i, 14] = rgba[i, 3]
 
 
-@njit(fastmath=True, parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
 def _numba_pack_rtri_outline_instances(v0, v1, v2, radius, thickness, rgba, out):
     """Impacchetta (N,16) instance buffer per DrawRoundedTrianglesOutlineBatch:
     shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+thickness(1)+rgba(4)."""
     n = v0.shape[0]
-    for i in prange(n):
+    for i in range(n):
         (sax, say, sbx, sby, scx, scy, r_eff,
          mnx, mny, mxx, mxy) = _rtri_shrink_and_aabb(
             v0[i, 0], v0[i, 1],
@@ -933,6 +952,994 @@ class TextureAtlas:
             self.tex = None
 
 
+# ============================================================================ #
+# PE_COLLISION — integrato in DRAW
+# ----------------------------------------------------------------------------
+# Tutto quello che segue proviene dal modulo PE_COLLISION (sistema unificato
+# di collisioni + interazione mouse): forme immutabili (Point, Rect, RotRect,
+# Circle, Ellipse, Line, Triangle, RoundedRect, Polygon, TextureCollider) e il
+# dispatcher polimorfico O(1) via tabella (_TABLE/_dispatch). Le funzioni
+# _xx_yy(a, b, draw) provano PRIMA a delegare ai metodi Collide* gia'
+# presenti piu' sotto in DRAW (via _use_draw), che sono le versioni piu'
+# ottimizzate (numpy/numba); solo se `draw` non le espone (o e' None) si
+# ricade sul fallback puro Python qui sotto. Le API pubbliche (che nel
+# modulo originale erano funzioni sciolte con un singleton globale
+# _RUNTIME + bind_draw/bind_window) sono diventate METODI di DRAW
+# (CheckCollision, MouseOver, MousePressed, ...): `self` e' sempre il
+# contesto draw/mouse, quindi ogni istanza DRAW/WINDOW ha il proprio stato
+# mouse indipendente, senza bisogno di registrarsi da nessuna parte.
+# ============================================================================ #
+_HAS_NUMPY = True  # numpy e' una dipendenza obbligatoria di questo file
+
+# --------------------------------------------------------------------------- #
+# Costanti tipo forma (int per branch prediction migliore delle stringhe)
+# --------------------------------------------------------------------------- #
+_T_POINT    = 0
+_T_RECT     = 1
+_T_ROTRECT  = 2
+_T_CIRCLE   = 3
+_T_ELLIPSE  = 4
+_T_LINE     = 5
+_T_TRIANGLE = 6
+_T_POLYGON  = 7
+_T_RRECT    = 8   # rounded rect
+_T_TEXCOL   = 9   # TextureCollider (compound)
+
+
+# --------------------------------------------------------------------------- #
+# Forme (immutabili, __slots__)
+# --------------------------------------------------------------------------- #
+class _Shape:
+    __slots__ = ("_t",)
+    def __repr__(self):
+        vals = ", ".join(f"{s}={getattr(self, s)!r}"
+                         for s in self.__slots__ if s != "_t")
+        return f"{self.__class__.__name__}({vals})"
+
+
+class Point(_Shape):
+    __slots__ = ("x", "y")
+    def __init__(self, x, y):
+        self._t = _T_POINT
+        self.x = float(x); self.y = float(y)
+
+
+class Rect(_Shape):
+    """Rettangolo allineato agli assi. (x,y) = angolo top-left, (w,h) = dimensioni."""
+    __slots__ = ("x", "y", "w", "h")
+    def __init__(self, x, y, w, h):
+        self._t = _T_RECT
+        self.x = float(x); self.y = float(y)
+        self.w = float(w); self.h = float(h)
+
+
+class RotRect(_Shape):
+    """Rettangolo ruotato (OBB). rotation in gradi, centro = (x+w/2, y+h/2)."""
+    __slots__ = ("x", "y", "w", "h", "rotation")
+    def __init__(self, x, y, w, h, rotation=0.0):
+        self._t = _T_ROTRECT
+        self.x = float(x); self.y = float(y)
+        self.w = float(w); self.h = float(h)
+        self.rotation = float(rotation)
+
+
+class Circle(_Shape):
+    __slots__ = ("cx", "cy", "r")
+    def __init__(self, cx, cy, r):
+        self._t = _T_CIRCLE
+        self.cx = float(cx); self.cy = float(cy); self.r = float(r)
+
+
+class Ellipse(_Shape):
+    __slots__ = ("cx", "cy", "rx", "ry", "rotation")
+    def __init__(self, cx, cy, rx, ry, rotation=0.0):
+        self._t = _T_ELLIPSE
+        self.cx = float(cx); self.cy = float(cy)
+        self.rx = float(rx); self.ry = float(ry)
+        self.rotation = float(rotation)
+
+
+class Line(_Shape):
+    __slots__ = ("x1", "y1", "x2", "y2", "thickness")
+    def __init__(self, x1, y1, x2, y2, thickness=1.0):
+        self._t = _T_LINE
+        self.x1 = float(x1); self.y1 = float(y1)
+        self.x2 = float(x2); self.y2 = float(y2)
+        self.thickness = float(thickness)
+
+
+class Triangle(_Shape):
+    __slots__ = ("x1", "y1", "x2", "y2", "x3", "y3")
+    def __init__(self, x1, y1, x2, y2, x3, y3):
+        self._t = _T_TRIANGLE
+        self.x1 = float(x1); self.y1 = float(y1)
+        self.x2 = float(x2); self.y2 = float(y2)
+        self.x3 = float(x3); self.y3 = float(y3)
+
+
+class RoundedRect(_Shape):
+    """Rectangle con angoli arrotondati. Per collisione: unione di rect + 4 cerchi."""
+    __slots__ = ("x", "y", "w", "h", "radius")
+    def __init__(self, x, y, w, h, radius):
+        self._t = _T_RRECT
+        self.x = float(x); self.y = float(y)
+        self.w = float(w); self.h = float(h)
+        self.radius = max(0.0, float(radius))
+
+
+class Polygon(_Shape):
+    """Poligono convesso o concavo. `points` = lista [(x,y), ...]."""
+    __slots__ = ("points", "_aabb", "_convex")
+    def __init__(self, points, convex=None):
+        self._t = _T_POLYGON
+        if len(points) < 3:
+            raise ValueError("Polygon requires >= 3 points")
+        self.points = tuple((float(x), float(y)) for x, y in points)
+        xs = [p[0] for p in self.points]
+        ys = [p[1] for p in self.points]
+        self._aabb = (min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys))
+        self._convex = _polygon_is_convex(self.points) if convex is None else bool(convex)
+
+
+# --------------------------------------------------------------------------- #
+# Utility geometriche pure (fallback e supporto polygon)
+# --------------------------------------------------------------------------- #
+_EPS = 1e-9
+
+def _polygon_is_convex(pts):
+    n = len(pts)
+    sign = 0
+    for i in range(n):
+        ax, ay = pts[i]
+        bx, by = pts[(i+1) % n]
+        cx, cy = pts[(i+2) % n]
+        cross = (bx-ax)*(cy-by) - (by-ay)*(cx-bx)
+        if cross > _EPS:
+            if sign < 0: return False
+            sign = 1
+        elif cross < -_EPS:
+            if sign > 0: return False
+            sign = -1
+    return True
+
+
+def _point_in_polygon(px, py, pts):
+    """Ray casting - funziona anche per poligoni concavi."""
+    n = len(pts)
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = pts[i]; xj, yj = pts[j]
+        if ((yi > py) != (yj > py)) and \
+           (px < (xj - xi) * (py - yi) / (yj - yi + _EPS) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _seg_seg_intersect(ax, ay, bx, by, cx, cy, dx, dy):
+    def orient(px, py, qx, qy, rx, ry):
+        return (qx-px)*(ry-py) - (qy-py)*(rx-px)
+    o1 = orient(ax, ay, bx, by, cx, cy)
+    o2 = orient(ax, ay, bx, by, dx, dy)
+    o3 = orient(cx, cy, dx, dy, ax, ay)
+    o4 = orient(cx, cy, dx, dy, bx, by)
+    if (o1 > 0) != (o2 > 0) and (o3 > 0) != (o4 > 0):
+        return True
+    return False
+
+
+def _polygon_aabb_overlap(a_aabb, b_aabb):
+    ax, ay, aw, ah = a_aabb
+    bx, by, bw, bh = b_aabb
+    return not (ax+aw < bx or ax > bx+bw or ay+ah < by or ay > by+bh)
+
+
+def _polygon_vs_polygon(A, B):
+    # AABB pre-check
+    if not _polygon_aabb_overlap(A._aabb, B._aabb):
+        return False
+    # Convesso vs convesso -> SAT
+    if A._convex and B._convex:
+        return _sat_convex(A.points, B.points)
+    # Almeno uno concavo -> test punti + intersezione lati
+    for p in A.points:
+        if _point_in_polygon(p[0], p[1], B.points):
+            return True
+    for p in B.points:
+        if _point_in_polygon(p[0], p[1], A.points):
+            return True
+    na, nb = len(A.points), len(B.points)
+    for i in range(na):
+        ax, ay = A.points[i]; bx, by = A.points[(i+1) % na]
+        for j in range(nb):
+            cx, cy = B.points[j]; dx, dy = B.points[(j+1) % nb]
+            if _seg_seg_intersect(ax, ay, bx, by, cx, cy, dx, dy):
+                return True
+    return False
+
+
+def _sat_convex(A, B):
+    for poly in (A, B):
+        n = len(poly)
+        for i in range(n):
+            x1, y1 = poly[i]; x2, y2 = poly[(i+1) % n]
+            nx, ny = -(y2 - y1), (x2 - x1)
+            L = math.hypot(nx, ny)
+            if L < _EPS: continue
+            nx /= L; ny /= L
+            aMin = aMax = A[0][0]*nx + A[0][1]*ny
+            for px, py in A[1:]:
+                d = px*nx + py*ny
+                if d < aMin: aMin = d
+                elif d > aMax: aMax = d
+            bMin = bMax = B[0][0]*nx + B[0][1]*ny
+            for px, py in B[1:]:
+                d = px*nx + py*ny
+                if d < bMin: bMin = d
+                elif d > bMax: bMax = d
+            if aMax < bMin or bMax < aMin:
+                return False
+    return True
+
+
+def _rect_corners(x, y, w, h, rotation):
+    cx = x + w * 0.5; cy = y + h * 0.5
+    hw = w * 0.5;     hh = h * 0.5
+    if rotation == 0.0:
+        return ((x, y), (x+w, y), (x+w, y+h), (x, y+h))
+    a = rotation * 0.017453292519943295
+    cs = math.cos(a); sn = math.sin(a)
+    out = []
+    for lx, ly in ((-hw,-hh),(hw,-hh),(hw,hh),(-hw,hh)):
+        out.append((cx + lx*cs - ly*sn, cy + lx*sn + ly*cs))
+    return tuple(out)
+
+
+# --------------------------------------------------------------------------- #
+# DISPATCHER — usa DRAW.Collide* quando presente, altrimenti fallback puri
+# --------------------------------------------------------------------------- #
+def _use_draw(draw, method, *args):
+    """Chiama draw.<method>(*args) se esiste; altrimenti ritorna None (sentinel)."""
+    if draw is not None:
+        fn = getattr(draw, method, None)
+        if fn is not None:
+            return fn(*args)
+    return None
+
+
+def _rrect_to_rect_and_circles(rr):
+    """Un RoundedRect e' un Rect centrale + 4 cerchi negli angoli.
+    Per collisione approssimiamo con un solo Rect esteso e 4 cerchi."""
+    r = rr.radius
+    inner = Rect(rr.x + r, rr.y, rr.w - 2*r, rr.h) if rr.w > 2*r else None
+    tall  = Rect(rr.x, rr.y + r, rr.w, rr.h - 2*r) if rr.h > 2*r else None
+    corners = (
+        Circle(rr.x + r,           rr.y + r,           r),
+        Circle(rr.x + rr.w - r,    rr.y + r,           r),
+        Circle(rr.x + r,           rr.y + rr.h - r,    r),
+        Circle(rr.x + rr.w - r,    rr.y + rr.h - r,    r),
+    )
+    return inner, tall, corners
+
+
+def _dispatch(a, b, draw):
+    """Ritorna True/False. Non normalizza gli ordini: chiama la funzione giusta
+    guardando entrambi i tipi (tabella statica)."""
+    ta, tb = a._t, b._t
+
+    # RoundedRect: scomponiamo in rect+cerchi e ricorriamo
+    if ta == _T_RRECT:
+        inner, tall, corners = _rrect_to_rect_and_circles(a)
+        if inner and _dispatch(inner, b, draw): return True
+        if tall  and _dispatch(tall,  b, draw): return True
+        for c in corners:
+            if _dispatch(c, b, draw): return True
+        return False
+    if tb == _T_RRECT:
+        return _dispatch(b, a, draw)
+
+    # TextureCollider: delega al proprio metodo
+    if ta == _T_TEXCOL:
+        return a._collides_shape(b, draw)
+    if tb == _T_TEXCOL:
+        return b._collides_shape(a, draw)
+
+    # Polygon: gestito puro Python + SAT
+    if ta == _T_POLYGON or tb == _T_POLYGON:
+        return _dispatch_polygon(a, b, draw)
+
+    key = (ta, tb)
+    fn = _TABLE.get(key)
+    if fn is None:
+        fn = _TABLE.get((tb, ta))
+        if fn is None:
+            raise TypeError(
+                f"check_collision: coppia non supportata "
+                f"({a.__class__.__name__} vs {b.__class__.__name__})")
+        return fn(b, a, draw)
+    return fn(a, b, draw)
+
+
+# --- Adattatori: ogni funzione firma (a, b, draw) -> bool ------------------
+def _pt_pt(a, b, draw):
+    return abs(a.x - b.x) < _EPS and abs(a.y - b.y) < _EPS
+
+def _pt_rect(a, b, draw):
+    r = _use_draw(draw, "CollidePointRect", a.x, a.y, b.x, b.y, b.w, b.h)
+    if r is not None: return bool(r)
+    return b.x <= a.x <= b.x + b.w and b.y <= a.y <= b.y + b.h
+
+def _pt_rotrect(a, b, draw):
+    r = _use_draw(draw, "CollidePointRotatedRect", a.x, a.y, b.x, b.y, b.w, b.h, b.rotation)
+    if r is not None: return bool(r)
+    return _point_in_polygon(a.x, a.y, _rect_corners(b.x, b.y, b.w, b.h, b.rotation))
+
+def _pt_circle(a, b, draw):
+    r = _use_draw(draw, "CollidePointCircle", a.x, a.y, b.cx, b.cy, b.r)
+    if r is not None: return bool(r)
+    dx = a.x - b.cx; dy = a.y - b.cy
+    return dx*dx + dy*dy <= b.r * b.r
+
+def _pt_ellipse(a, b, draw):
+    r = _use_draw(draw, "CollidePointEllipse", a.x, a.y, b.cx, b.cy, b.rx, b.ry, b.rotation)
+    if r is not None: return bool(r)
+    if b.rx <= 0 or b.ry <= 0: return False
+    if b.rotation != 0.0:
+        ang = -b.rotation * 0.017453292519943295
+        cs = math.cos(ang); sn = math.sin(ang)
+        dx = a.x - b.cx; dy = a.y - b.cy
+        px = dx*cs - dy*sn; py = dx*sn + dy*cs
+    else:
+        px = a.x - b.cx; py = a.y - b.cy
+    return (px*px)/(b.rx*b.rx) + (py*py)/(b.ry*b.ry) <= 1.0
+
+def _pt_line(a, b, draw):
+    r = _use_draw(draw, "PointInLine", a.x, a.y, b.x1, b.y1, b.x2, b.y2, b.thickness)
+    if r is not None: return bool(r)
+    dx = b.x2 - b.x1; dy = b.y2 - b.y1
+    if dx == 0 and dy == 0:
+        return math.hypot(a.x - b.x1, a.y - b.y1) <= b.thickness * 0.5
+    t = ((a.x - b.x1)*dx + (a.y - b.y1)*dy) / (dx*dx + dy*dy)
+    t = max(0.0, min(1.0, t))
+    return math.hypot(a.x - (b.x1 + t*dx), a.y - (b.y1 + t*dy)) <= b.thickness * 0.5
+
+def _pt_tri(a, b, draw):
+    r = _use_draw(draw, "CollidePointTriangle", a.x, a.y, b.x1, b.y1, b.x2, b.y2, b.x3, b.y3)
+    if r is not None: return bool(r)
+    d1 = (a.x-b.x2)*(b.y1-b.y2) - (b.x1-b.x2)*(a.y-b.y2)
+    d2 = (a.x-b.x3)*(b.y2-b.y3) - (b.x2-b.x3)*(a.y-b.y3)
+    d3 = (a.x-b.x1)*(b.y3-b.y1) - (b.x3-b.x1)*(a.y-b.y1)
+    neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+    pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+    return not (neg and pos)
+
+def _rect_rect(a, b, draw):
+    r = _use_draw(draw, "CollideRectRect", a.x, a.y, a.w, a.h, b.x, b.y, b.w, b.h)
+    if r is not None: return bool(r)
+    return not (a.x + a.w < b.x or a.x > b.x + b.w or
+                a.y + a.h < b.y or a.y > b.y + b.h)
+
+def _rect_rotrect(a, b, draw):
+    r = _use_draw(draw, "CollideRectRotatedRect", a.x, a.y, a.w, a.h,
+                  b.x, b.y, b.w, b.h, b.rotation)
+    if r is not None: return bool(r)
+    return _sat_convex(_rect_corners(a.x, a.y, a.w, a.h, 0.0),
+                       _rect_corners(b.x, b.y, b.w, b.h, b.rotation))
+
+def _rotrect_rotrect(a, b, draw):
+    r = _use_draw(draw, "CollideRotatedRectRotatedRect",
+                  a.x, a.y, a.w, a.h, a.rotation,
+                  b.x, b.y, b.w, b.h, b.rotation)
+    if r is not None: return bool(r)
+    return _sat_convex(_rect_corners(a.x, a.y, a.w, a.h, a.rotation),
+                       _rect_corners(b.x, b.y, b.w, b.h, b.rotation))
+
+def _rect_circle(a, b, draw):
+    r = _use_draw(draw, "CollideRectCircle", a.x, a.y, a.w, a.h, b.cx, b.cy, b.r)
+    if r is not None: return bool(r)
+    nx = max(a.x, min(b.cx, a.x + a.w))
+    ny = max(a.y, min(b.cy, a.y + a.h))
+    dx = nx - b.cx; dy = ny - b.cy
+    return dx*dx + dy*dy <= b.r * b.r
+
+def _rotrect_circle(a, b, draw):
+    r = _use_draw(draw, "CollideRotatedRectCircle",
+                  a.x, a.y, a.w, a.h, a.rotation, b.cx, b.cy, b.r)
+    if r is not None: return bool(r)
+    # rotazione inversa del centro cerchio in spazio locale rect
+    cx = a.x + a.w * 0.5; cy = a.y + a.h * 0.5
+    ang = -a.rotation * 0.017453292519943295
+    cs = math.cos(ang); sn = math.sin(ang)
+    dx = b.cx - cx; dy = b.cy - cy
+    lx = dx*cs - dy*sn; ly = dx*sn + dy*cs
+    nx = max(-a.w*0.5, min(lx, a.w*0.5))
+    ny = max(-a.h*0.5, min(ly, a.h*0.5))
+    ex = lx - nx; ey = ly - ny
+    return ex*ex + ey*ey <= b.r * b.r
+
+def _rect_ellipse(a, b, draw):
+    r = _use_draw(draw, "CollideRectEllipse", a.x, a.y, a.w, a.h,
+                  b.cx, b.cy, b.rx, b.ry, b.rotation)
+    if r is not None: return bool(r)
+    # Fallback grezzo: 4 vertici rect vs ellisse + centro ellisse vs rect
+    if _pt_rect(Point(b.cx, b.cy), a, draw): return True
+    for (px, py) in ((a.x,a.y),(a.x+a.w,a.y),(a.x+a.w,a.y+a.h),(a.x,a.y+a.h)):
+        if _pt_ellipse(Point(px,py), b, draw): return True
+    return False
+
+def _rect_tri(a, b, draw):
+    r = _use_draw(draw, "CollideRectTriangle", a.x, a.y, a.w, a.h,
+                  b.x1, b.y1, b.x2, b.y2, b.x3, b.y3)
+    if r is not None: return bool(r)
+    tri_pts = ((b.x1,b.y1),(b.x2,b.y2),(b.x3,b.y3))
+    rect_pts = _rect_corners(a.x, a.y, a.w, a.h, 0.0)
+    return _sat_convex(rect_pts, tri_pts)
+
+def _rect_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineRect", b.x1, b.y1, b.x2, b.y2,
+                  a.x, a.y, a.w, a.h)
+    if r is not None: return bool(r)
+    if _pt_rect(Point(b.x1, b.y1), a, draw): return True
+    if _pt_rect(Point(b.x2, b.y2), a, draw): return True
+    corners = ((a.x,a.y),(a.x+a.w,a.y),(a.x+a.w,a.y+a.h),(a.x,a.y+a.h))
+    for i in range(4):
+        if _seg_seg_intersect(b.x1, b.y1, b.x2, b.y2,
+                              corners[i][0], corners[i][1],
+                              corners[(i+1)%4][0], corners[(i+1)%4][1]):
+            return True
+    return False
+
+def _rotrect_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineRotatedRect", b.x1, b.y1, b.x2, b.y2,
+                  a.x, a.y, a.w, a.h, a.rotation)
+    if r is not None: return bool(r)
+    if _pt_rotrect(Point(b.x1, b.y1), a, draw): return True
+    if _pt_rotrect(Point(b.x2, b.y2), a, draw): return True
+    corners = _rect_corners(a.x, a.y, a.w, a.h, a.rotation)
+    for i in range(4):
+        if _seg_seg_intersect(b.x1, b.y1, b.x2, b.y2,
+                              corners[i][0], corners[i][1],
+                              corners[(i+1)%4][0], corners[(i+1)%4][1]):
+            return True
+    return False
+
+def _rotrect_ellipse(a, b, draw):
+    r = _use_draw(draw, "CollideEllipseRotatedRect",
+                  b.cx, b.cy, b.rx, b.ry, b.rotation,
+                  a.x, a.y, a.w, a.h, a.rotation)
+    if r is not None: return bool(r)
+    return _rect_ellipse(Rect(a.x, a.y, a.w, a.h), b, draw)
+
+def _rotrect_tri(a, b, draw):
+    r = _use_draw(draw, "CollideTriangleRotatedRect",
+                  b.x1, b.y1, b.x2, b.y2, b.x3, b.y3,
+                  a.x, a.y, a.w, a.h, a.rotation)
+    if r is not None: return bool(r)
+    return _sat_convex(_rect_corners(a.x, a.y, a.w, a.h, a.rotation),
+                       ((b.x1,b.y1),(b.x2,b.y2),(b.x3,b.y3)))
+
+def _circle_circle(a, b, draw):
+    r = _use_draw(draw, "CollideCircleCircle", a.cx, a.cy, a.r, b.cx, b.cy, b.r)
+    if r is not None: return bool(r)
+    dx = a.cx - b.cx; dy = a.cy - b.cy
+    rr = a.r + b.r
+    return dx*dx + dy*dy <= rr * rr
+
+def _circle_ellipse(a, b, draw):
+    r = _use_draw(draw, "CollideCircleEllipse", a.cx, a.cy, a.r,
+                  b.cx, b.cy, b.rx, b.ry, b.rotation)
+    if r is not None: return bool(r)
+    return _pt_ellipse(Point(a.cx, a.cy),
+                       Ellipse(b.cx, b.cy, b.rx + a.r, b.ry + a.r, b.rotation), draw)
+
+def _circle_tri(a, b, draw):
+    r = _use_draw(draw, "CollideCircleTriangle", a.cx, a.cy, a.r,
+                  b.x1, b.y1, b.x2, b.y2, b.x3, b.y3)
+    if r is not None: return bool(r)
+    if _pt_tri(Point(a.cx, a.cy), b, draw): return True
+    for (x1,y1),(x2,y2) in (((b.x1,b.y1),(b.x2,b.y2)),
+                            ((b.x2,b.y2),(b.x3,b.y3)),
+                            ((b.x3,b.y3),(b.x1,b.y1))):
+        if _pt_line(Point(a.cx, a.cy), Line(x1,y1,x2,y2, a.r*2), draw):
+            return True
+    return False
+
+def _circle_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineCircle", b.x1, b.y1, b.x2, b.y2, a.cx, a.cy, a.r)
+    if r is not None: return bool(r)
+    return _pt_line(Point(a.cx, a.cy),
+                    Line(b.x1, b.y1, b.x2, b.y2, a.r*2 + b.thickness), draw)
+
+def _ellipse_ellipse(a, b, draw):
+    # BUG FIX: CollideEllipseEllipse ha una firma con rot1/rot2 SEPARATI dai
+    # rispettivi centro/raggi (a differenza di quasi tutte le altre Collide*,
+    # che incorporano la rotazione subito dopo i parametri della propria
+    # forma). Prima questa chiamata non passava affatto a.rotation/b.rotation,
+    # quindi qualunque Ellipse ruotata veniva silenziosamente testata come se
+    # rotation=0 -- falsi negativi/positivi per ogni ellisse ruotata.
+    r = _use_draw(draw, "CollideEllipseEllipse",
+                  a.cx, a.cy, a.rx, a.ry, b.cx, b.cy, b.rx, b.ry,
+                  a.rotation, b.rotation)
+    if r is not None: return bool(r)
+    # Fallback puro Python: se una delle due e' ruotata, la somma diretta dei
+    # raggi (valida solo per cerchi/ellissi assi-allineate) non e' corretta.
+    if a.rotation == 0.0 and b.rotation == 0.0:
+        dx = a.cx - b.cx; dy = a.cy - b.cy
+        rx = a.rx + b.rx; ry = a.ry + b.ry
+        if rx <= 0 or ry <= 0: return False
+        return (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry) <= 1.0
+    # Caso generale ruotato: contenimento del centro + campionamento del
+    # perimetro di entrambe le ellissi (stessa strategia robusta usata da
+    # CollideEllipseEllipse in PE_DRAW), cosi' il fallback resta corretto
+    # anche quando `draw` non e' disponibile.
+    if _pt_ellipse(Point(a.cx, a.cy), b, draw): return True
+    if _pt_ellipse(Point(b.cx, b.cy), a, draw): return True
+    samples = max(24, int(max(a.rx, a.ry, b.rx, b.ry) * 0.5))
+    step = 2.0 * math.pi / samples
+    ang_a = a.rotation * 0.017453292519943295
+    cs_a = math.cos(ang_a); sn_a = math.sin(ang_a)
+    ang_b = b.rotation * 0.017453292519943295
+    cs_b = math.cos(ang_b); sn_b = math.sin(ang_b)
+    for i in range(samples):
+        t = i * step
+        lx = a.rx * math.cos(t); ly = a.ry * math.sin(t)
+        px = a.cx + lx*cs_a - ly*sn_a; py = a.cy + lx*sn_a + ly*cs_a
+        if _pt_ellipse(Point(px, py), b, draw): return True
+        lx = b.rx * math.cos(t); ly = b.ry * math.sin(t)
+        px = b.cx + lx*cs_b - ly*sn_b; py = b.cy + lx*sn_b + ly*cs_b
+        if _pt_ellipse(Point(px, py), a, draw): return True
+    return False
+
+def _ellipse_tri(a, b, draw):
+    r = _use_draw(draw, "CollideEllipseTriangle",
+                  a.cx, a.cy, a.rx, a.ry, b.x1, b.y1, b.x2, b.y2, b.x3, b.y3,
+                  a.rotation)
+    if r is not None: return bool(r)
+    if _pt_ellipse(Point(b.x1, b.y1), a, draw): return True
+    if _pt_ellipse(Point(b.x2, b.y2), a, draw): return True
+    if _pt_ellipse(Point(b.x3, b.y3), a, draw): return True
+    if _pt_tri(Point(a.cx, a.cy), b, draw): return True
+    return False
+
+def _ellipse_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineEllipse", b.x1, b.y1, b.x2, b.y2,
+                  a.cx, a.cy, a.rx, a.ry, a.rotation)
+    if r is not None: return bool(r)
+    if _pt_ellipse(Point(b.x1, b.y1), a, draw): return True
+    if _pt_ellipse(Point(b.x2, b.y2), a, draw): return True
+    return False
+
+def _tri_tri(a, b, draw):
+    r = _use_draw(draw, "CollideTriangleTriangle",
+                  a.x1, a.y1, a.x2, a.y2, a.x3, a.y3,
+                  b.x1, b.y1, b.x2, b.y2, b.x3, b.y3)
+    if r is not None: return bool(r)
+    return _sat_convex(((a.x1,a.y1),(a.x2,a.y2),(a.x3,a.y3)),
+                       ((b.x1,b.y1),(b.x2,b.y2),(b.x3,b.y3)))
+
+def _tri_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineTriangle", b.x1, b.y1, b.x2, b.y2,
+                  a.x1, a.y1, a.x2, a.y2, a.x3, a.y3)
+    if r is not None: return bool(r)
+    if _pt_tri(Point(b.x1, b.y1), a, draw): return True
+    if _pt_tri(Point(b.x2, b.y2), a, draw): return True
+    for (x1,y1),(x2,y2) in (((a.x1,a.y1),(a.x2,a.y2)),
+                            ((a.x2,a.y2),(a.x3,a.y3)),
+                            ((a.x3,a.y3),(a.x1,a.y1))):
+        if _seg_seg_intersect(b.x1, b.y1, b.x2, b.y2, x1, y1, x2, y2):
+            return True
+    return False
+
+def _line_line(a, b, draw):
+    r = _use_draw(draw, "CollideLineLine", a.x1, a.y1, a.x2, a.y2,
+                  b.x1, b.y1, b.x2, b.y2)
+    if r is not None: return bool(r)
+    return _seg_seg_intersect(a.x1, a.y1, a.x2, a.y2, b.x1, b.y1, b.x2, b.y2)
+
+
+# Tabella dispatch: chiave (type_a, type_b). Se manca, il dispatcher prova
+# a scambiare gli argomenti (la funzione riceve sempre a,b nell'ordine registrato).
+_TABLE = {
+    (_T_POINT,    _T_POINT):    _pt_pt,
+    (_T_POINT,    _T_RECT):     _pt_rect,
+    (_T_POINT,    _T_ROTRECT):  _pt_rotrect,
+    (_T_POINT,    _T_CIRCLE):   _pt_circle,
+    (_T_POINT,    _T_ELLIPSE):  _pt_ellipse,
+    (_T_POINT,    _T_LINE):     _pt_line,
+    (_T_POINT,    _T_TRIANGLE): _pt_tri,
+
+    (_T_RECT,     _T_RECT):     _rect_rect,
+    (_T_RECT,     _T_ROTRECT):  _rect_rotrect,
+    (_T_ROTRECT,  _T_ROTRECT):  _rotrect_rotrect,
+    (_T_RECT,     _T_CIRCLE):   _rect_circle,
+    (_T_ROTRECT,  _T_CIRCLE):   _rotrect_circle,
+    (_T_RECT,     _T_ELLIPSE):  _rect_ellipse,
+    (_T_ROTRECT,  _T_ELLIPSE):  _rotrect_ellipse,
+    (_T_RECT,     _T_TRIANGLE): _rect_tri,
+    (_T_ROTRECT,  _T_TRIANGLE): _rotrect_tri,
+    (_T_RECT,     _T_LINE):     _rect_line,
+    (_T_ROTRECT,  _T_LINE):     _rotrect_line,
+
+    (_T_CIRCLE,   _T_CIRCLE):   _circle_circle,
+    (_T_CIRCLE,   _T_ELLIPSE):  _circle_ellipse,
+    (_T_CIRCLE,   _T_TRIANGLE): _circle_tri,
+    (_T_CIRCLE,   _T_LINE):     _circle_line,
+
+    (_T_ELLIPSE,  _T_ELLIPSE):  _ellipse_ellipse,
+    (_T_ELLIPSE,  _T_TRIANGLE): _ellipse_tri,
+    (_T_ELLIPSE,  _T_LINE):     _ellipse_line,
+
+    (_T_TRIANGLE, _T_TRIANGLE): _tri_tri,
+    (_T_TRIANGLE, _T_LINE):     _tri_line,
+
+    (_T_LINE,     _T_LINE):     _line_line,
+}
+
+
+# --- Polygon dispatch -------------------------------------------------------
+def _dispatch_polygon(a, b, draw):
+    # Assicura A = Polygon
+    if a._t != _T_POLYGON:
+        a, b = b, a
+    # Polygon vs Polygon
+    if b._t == _T_POLYGON:
+        return _polygon_vs_polygon(a, b)
+    # Polygon vs primitiva: converti primitiva in polygon quando possibile,
+    # oppure test punto/lati.
+    if b._t == _T_POINT:
+        return _point_in_polygon(b.x, b.y, a.points)
+    if b._t == _T_RECT:
+        return _polygon_vs_polygon(a, Polygon(_rect_corners(b.x,b.y,b.w,b.h,0.0)))
+    if b._t == _T_ROTRECT:
+        return _polygon_vs_polygon(a,
+            Polygon(_rect_corners(b.x, b.y, b.w, b.h, b.rotation)))
+    if b._t == _T_TRIANGLE:
+        return _polygon_vs_polygon(a,
+            Polygon(((b.x1,b.y1),(b.x2,b.y2),(b.x3,b.y3))))
+    if b._t == _T_LINE:
+        # linea come "polygon degenere": test vertici + segmento vs lati poly
+        if _point_in_polygon(b.x1, b.y1, a.points): return True
+        if _point_in_polygon(b.x2, b.y2, a.points): return True
+        pts = a.points; n = len(pts)
+        for i in range(n):
+            x1, y1 = pts[i]; x2, y2 = pts[(i+1) % n]
+            if _seg_seg_intersect(b.x1, b.y1, b.x2, b.y2, x1, y1, x2, y2):
+                return True
+        return False
+    if b._t == _T_CIRCLE:
+        # centro dentro poly?
+        if _point_in_polygon(b.cx, b.cy, a.points): return True
+        pts = a.points; n = len(pts)
+        for i in range(n):
+            x1, y1 = pts[i]; x2, y2 = pts[(i+1) % n]
+            if _pt_line(Point(b.cx, b.cy), Line(x1, y1, x2, y2, b.r*2), draw):
+                return True
+        return False
+    if b._t == _T_ELLIPSE:
+        # Centro dentro il poligono?
+        if _point_in_polygon(b.cx, b.cy, a.points):
+            return True
+        # Vertici del poligono dentro l'ellisse?
+        for p in a.points:
+            if _pt_ellipse(Point(p[0], p[1]), b, draw):
+                return True
+        # **FIX: intersezione tra ogni lato del poligono e l'ellisse**
+        pts = a.points
+        n = len(pts)
+        for i in range(n):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % n]
+            if DRAW._segment_intersects_ellipse(
+                x1, y1, x2, y2,
+                b.cx, b.cy, b.rx, b.ry, b.rotation
+            ):
+                return True
+        return False
+    raise TypeError(f"Polygon vs {b.__class__.__name__} non supportato")
+
+
+# --------------------------------------------------------------------------- #
+# TEXTURE COLLIDER — collider personalizzabili per immagini
+# --------------------------------------------------------------------------- #
+class TextureCollider(_Shape):
+    """Collider per una texture (immagine) con forma personalizzabile.
+
+    Le texture non hanno una forma di default: usa questo collider per dirgli
+    esattamente come deve essere trattata la collisione. Modalita' disponibili:
+
+        mode="rect"    : AABB della texture (dimensioni tx,ty,tw,th; supporta rotation).
+        mode="rotrect" : OBB (usa rotation).
+        mode="circle"  : cerchio inscritto o custom (radius=...).
+        mode="ellipse" : ellisse.
+        mode="polygon" : poligono arbitrario (points=[(x,y),...] RELATIVI al top-left).
+        mode="pixel"   : maschera pixel-perfect (soglia alpha). Richiede PIL+numpy.
+                         Usa `image_path=...` oppure `alpha_mask=<np.ndarray bool>`.
+
+    Esempi
+    ------
+        # cerchio manuale
+        col = TextureCollider(tx=100, ty=100, tw=64, th=64,
+                              mode="circle", radius=30)
+
+        # poligono che approssima una spada
+        sword = TextureCollider(tx=100, ty=100, tw=32, th=128,
+                                mode="polygon",
+                                points=[(14,0),(18,0),(18,128),(14,128)])
+
+        # pixel-perfect (dopo aver caricato l'immagine)
+        col = TextureCollider(tx=0, ty=0, tw=64, th=64,
+                              mode="pixel", image_path="assets/hero.png",
+                              alpha_threshold=8)
+    """
+    __slots__ = ("tx", "ty", "tw", "th", "rotation", "mode",
+                 "_shape_cache", "_mask", "_mask_w", "_mask_h",
+                 "_alpha_threshold", "_points_rel", "_radius",
+                 "_erx", "_ery")
+
+    def __init__(self, tx, ty, tw, th, mode="rect", rotation=0.0,
+                 radius=None, rx=None, ry=None,
+                 points=None, image_path=None, alpha_mask=None,
+                 alpha_threshold=1):
+        self._t = _T_TEXCOL
+        self.tx = float(tx); self.ty = float(ty)
+        self.tw = float(tw); self.th = float(th)
+        self.rotation = float(rotation)
+        self.mode = mode
+        self._shape_cache = None
+        self._mask = None
+        self._mask_w = self._mask_h = 0
+        self._alpha_threshold = int(alpha_threshold)
+        self._points_rel = None
+        self._radius = radius
+        self._erx = rx; self._ery = ry
+
+        if mode == "polygon":
+            if not points:
+                raise ValueError("TextureCollider mode='polygon' richiede points=[...]")
+            self._points_rel = tuple((float(x), float(y)) for x, y in points)
+        elif mode == "pixel":
+            if alpha_mask is not None:
+                if not _HAS_NUMPY:
+                    raise RuntimeError("Pixel-mask richiede numpy")
+                arr = np.asarray(alpha_mask, dtype=bool)
+                if arr.ndim != 2:
+                    raise ValueError("alpha_mask deve essere 2D (H,W)")
+                self._mask = arr
+                self._mask_h, self._mask_w = arr.shape
+            elif image_path is not None:
+                self._load_mask(image_path)
+            else:
+                raise ValueError("TextureCollider mode='pixel' richiede image_path=... o alpha_mask=...")
+
+    # -- setup ----------------------------------------------------------------
+    def _load_mask(self, path):
+        if not (_HAS_PIL and _HAS_NUMPY):
+            raise RuntimeError("Pixel-mask richiede PIL e numpy")
+        im = Image.open(path).convert("RGBA")
+        arr = np.array(im)  # (H, W, 4)
+        self._mask = arr[..., 3] >= self._alpha_threshold
+        self._mask_h, self._mask_w = self._mask.shape
+
+    # -- posizione dinamica ---------------------------------------------------
+    def move_to(self, tx, ty):
+        self.tx = float(tx); self.ty = float(ty)
+        self._shape_cache = None
+        return self
+
+    def rotate(self, rotation):
+        self.rotation = float(rotation)
+        self._shape_cache = None
+        return self
+
+    # -- shape derivata (per collision & debug draw) --------------------------
+    def _derived_shape(self):
+        if self._shape_cache is not None:
+            return self._shape_cache
+        m = self.mode
+        if m == "rect":
+            if self.rotation == 0.0:
+                s = Rect(self.tx, self.ty, self.tw, self.th)
+            else:
+                s = RotRect(self.tx, self.ty, self.tw, self.th, self.rotation)
+        elif m == "rotrect":
+            s = RotRect(self.tx, self.ty, self.tw, self.th, self.rotation)
+        elif m == "circle":
+            r = self._radius if self._radius is not None else min(self.tw, self.th) * 0.5
+            s = Circle(self.tx + self.tw*0.5, self.ty + self.th*0.5, r)
+        elif m == "ellipse":
+            rx = self._erx if self._erx is not None else self.tw * 0.5
+            ry = self._ery if self._ery is not None else self.th * 0.5
+            s = Ellipse(self.tx + self.tw*0.5, self.ty + self.th*0.5, rx, ry, self.rotation)
+        elif m == "polygon":
+            # applica rotazione attorno al centro texture
+            if self.rotation == 0.0:
+                pts = tuple((self.tx + x, self.ty + y) for (x, y) in self._points_rel)
+            else:
+                cx = self.tx + self.tw * 0.5; cy = self.ty + self.th * 0.5
+                a = self.rotation * 0.017453292519943295
+                cs = math.cos(a); sn = math.sin(a)
+                pts = []
+                for (x, y) in self._points_rel:
+                    wx = self.tx + x; wy = self.ty + y
+                    dx = wx - cx; dy = wy - cy
+                    pts.append((cx + dx*cs - dy*sn, cy + dx*sn + dy*cs))
+                pts = tuple(pts)
+            s = Polygon(pts)
+        elif m == "pixel":
+            # rappresentazione geometrica per debug: rect esterno
+            if self.rotation == 0.0:
+                s = Rect(self.tx, self.ty, self.tw, self.th)
+            else:
+                s = RotRect(self.tx, self.ty, self.tw, self.th, self.rotation)
+        else:
+            raise ValueError(f"TextureCollider mode sconosciuto: {m!r}")
+        self._shape_cache = s
+        return s
+
+    # -- collisione con altra forma ------------------------------------------
+    def _collides_shape(self, other, draw):
+        if self.mode == "pixel":
+            return self._collides_pixel(other, draw)
+        return _dispatch(self._derived_shape(), other, draw)
+
+    # -- pixel-mask fast path ------------------------------------------------
+    def _collides_pixel(self, other, draw):
+        # Bounding AABB del texture in mondo
+        if self.rotation != 0.0:
+            # per rotazioni usiamo l'AABB del OBB (piu' semplice, ok come pre-check)
+            corners = _rect_corners(self.tx, self.ty, self.tw, self.th, self.rotation)
+            xs = [c[0] for c in corners]; ys = [c[1] for c in corners]
+            aabb = Rect(min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys))
+        else:
+            aabb = Rect(self.tx, self.ty, self.tw, self.th)
+
+        # Fast-reject AABB
+        if not _dispatch(aabb, other, draw):
+            return False
+
+        if not _HAS_NUMPY:
+            return True  # senza numpy ci fermiamo al AABB (comportamento sicuro)
+
+        # Ricava AABB intersezione in coordinate immagine (0..mask_w, 0..mask_h)
+        mw = self._mask_w; mh = self._mask_h
+        sx = mw / self.tw; sy = mh / self.th
+
+        # AABB "other" in mondo -> in coord texture (senza rotazione)
+        # Per semplicita': se rotation!=0, ruotiamo il punto/AABB della forma "other"
+        # nel sistema locale del texture.
+        if self.rotation != 0.0:
+            cx = self.tx + self.tw * 0.5; cy = self.ty + self.th * 0.5
+            ang = -self.rotation * 0.017453292519943295
+            cs = math.cos(ang); sn = math.sin(ang)
+            def to_local(px, py):
+                dx = px - cx; dy = py - cy
+                lx = dx*cs - dy*sn; ly = dx*sn + dy*cs
+                return lx + self.tw*0.5, ly + self.th*0.5
+        else:
+            def to_local(px, py):
+                return px - self.tx, py - self.ty
+
+        # Ottieni AABB della "other" in coord locali texture
+        oaabb = _shape_aabb(other)
+        if oaabb is None:
+            return True  # non riusciamo a calcolare AABB -> conservativo
+        ox, oy, ow, oh = oaabb
+        # 4 vertici -> locale -> bounding box locale
+        pts_local = [to_local(ox, oy), to_local(ox+ow, oy),
+                     to_local(ox+ow, oy+oh), to_local(ox, oy+oh)]
+        lxs = [p[0] for p in pts_local]; lys = [p[1] for p in pts_local]
+        lx0 = max(0.0, min(lxs)); ly0 = max(0.0, min(lys))
+        lx1 = min(self.tw, max(lxs)); ly1 = min(self.th, max(lys))
+        if lx0 > lx1 or ly0 > ly1:
+            return False
+
+        # Coordinate immagine — garantisce ALMENO un pixel (Point / AABB
+        # zero-area campionerebbero altrimenti un range vuoto).
+        ix0 = int(math.floor(lx0 * sx)); iy0 = int(math.floor(ly0 * sy))
+        ix1 = int(math.ceil (lx1 * sx)); iy1 = int(math.ceil (ly1 * sy))
+        if ix1 == ix0: ix1 = ix0 + 1
+        if iy1 == iy0: iy1 = iy0 + 1
+        ix0 = max(0, ix0); iy0 = max(0, iy0)
+        ix1 = min(mw, ix1); iy1 = min(mh, iy1)
+        if ix0 >= ix1 or iy0 >= iy1:
+            return False
+
+        # Cropped mask: c'e' almeno un pixel opaco?
+        return bool(self._mask[iy0:iy1, ix0:ix1].any())
+
+
+def _shape_aabb(s):
+    """AABB (x,y,w,h) di una forma qualsiasi. None se non calcolabile."""
+    t = s._t
+    if t == _T_POINT:    return (s.x, s.y, 0.0, 0.0)
+    if t == _T_RECT:     return (s.x, s.y, s.w, s.h)
+    if t == _T_ROTRECT:
+        c = _rect_corners(s.x, s.y, s.w, s.h, s.rotation)
+        xs = [p[0] for p in c]; ys = [p[1] for p in c]
+        return (min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys))
+    if t == _T_CIRCLE:   return (s.cx - s.r, s.cy - s.r, s.r*2, s.r*2)
+    if t == _T_ELLIPSE:
+        if s.rotation == 0.0:
+            return (s.cx - s.rx, s.cy - s.ry, s.rx*2, s.ry*2)
+        a = s.rotation * 0.017453292519943295
+        cs = math.cos(a); sn = math.sin(a)
+        hw = math.hypot(s.rx*cs, s.ry*sn); hh = math.hypot(s.rx*sn, s.ry*cs)
+        return (s.cx - hw, s.cy - hh, hw*2, hh*2)
+    if t == _T_LINE:
+        x0 = min(s.x1, s.x2); y0 = min(s.y1, s.y2)
+        return (x0, y0, abs(s.x2 - s.x1), abs(s.y2 - s.y1))
+    if t == _T_TRIANGLE:
+        x0 = min(s.x1, s.x2, s.x3); y0 = min(s.y1, s.y2, s.y3)
+        return (x0, y0, max(s.x1,s.x2,s.x3)-x0, max(s.y1,s.y2,s.y3)-y0)
+    if t == _T_POLYGON:  return s._aabb
+    if t == _T_RRECT:    return (s.x, s.y, s.w, s.h)
+    if t == _T_TEXCOL:   return (s.tx, s.ty, s.tw, s.th)
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# DEBUG DRAW
+# --------------------------------------------------------------------------- #
+def _draw_shape_outline(draw, shape, color, thickness=2.0):
+    """Disegna il contorno della forma sul draw (istanza DRAW). Silente se draw=None."""
+    if draw is None:
+        return
+    t = shape._t
+    if t == _T_TEXCOL:
+        _draw_shape_outline(draw, shape._derived_shape(), color, thickness)
+        return
+    if t == _T_POINT:
+        # piccolo cerchio pieno per visualizzarlo
+        if hasattr(draw, "DrawCircleOutline"):
+            draw.DrawCircleOutline(shape.x, shape.y, 3.0, thickness=thickness, color=color)
+        return
+    if t == _T_RECT:
+        if hasattr(draw, "DrawRectOutline"):
+            draw.DrawRectOutline(shape.x, shape.y, shape.w, shape.h,
+                                 thickness=thickness, color=color)
+        return
+    if t == _T_ROTRECT:
+        if hasattr(draw, "DrawRectOutline"):
+            draw.DrawRectOutline(shape.x, shape.y, shape.w, shape.h,
+                                 thickness=thickness, color=color, rotation=shape.rotation)
+        return
+    if t == _T_CIRCLE:
+        if hasattr(draw, "DrawCircleOutline"):
+            draw.DrawCircleOutline(shape.cx, shape.cy, shape.r,
+                                   thickness=thickness, color=color)
+        return
+    if t == _T_ELLIPSE:
+        if hasattr(draw, "DrawEllipseOutline"):
+            draw.DrawEllipseOutline(shape.cx, shape.cy, shape.rx, shape.ry,
+                                    thickness=thickness, color=color, rotation=shape.rotation)
+        return
+    if t == _T_LINE:
+        if hasattr(draw, "DrawLine"):
+            draw.DrawLine(shape.x1, shape.y1, shape.x2, shape.y2,
+                          thickness=max(thickness, shape.thickness), color=color)
+        return
+    if t == _T_TRIANGLE:
+        if hasattr(draw, "DrawTriangleOutline"):
+            draw.DrawTriangleOutline(shape.x1, shape.y1, shape.x2, shape.y2,
+                                     shape.x3, shape.y3, thickness=thickness, color=color)
+        return
+    if t == _T_RRECT:
+        if hasattr(draw, "DrawRoundedRectOutline"):
+            draw.DrawRoundedRectOutline(shape.x, shape.y, shape.w, shape.h,
+                                        shape.radius, thickness=thickness, color=color)
+        return
+    if t == _T_POLYGON:
+        # disegna lati come linee
+        if hasattr(draw, "DrawLine"):
+            pts = shape.points; n = len(pts)
+            for i in range(n):
+                x1, y1 = pts[i]; x2, y2 = pts[(i+1) % n]
+                draw.DrawLine(x1, y1, x2, y2, thickness=thickness, color=color)
+        return
+
+
+
 class DRAW:
     _DEG2RAD = 0.017453292519943295
     _TAU = 6.283185307179586
@@ -999,6 +2006,112 @@ class DRAW:
             raise TypeError(f"{name} must contain only numeric values, got dtype {a.dtype}")
         if a.size and not np.all(np.isfinite(a)):
             raise ValueError(f"{name} contains NaN or Inf")
+
+    # ------------------------------------------------------------------ #
+    # EARLY-Z / DEPTH TEST — opt-in, retro-compatibile
+    # ------------------------------------------------------------------ #
+    # Uso tipico (nel loop di draw):
+    #
+    #   window.enable_early_z(True)                # una volta sola all'avvio
+    #   # ---- pass 1: opachi front-to-back ----
+    #   window.begin_opaque_pass()
+    #   for spr in DRAW.sort_front_to_back(opaque_sprites, key=lambda s: s.z):
+    #       spr.draw()                             # depth write ON, alpha OFF
+    #   # ---- pass 2: semitrasparenti back-to-front ----
+    #   window.begin_transparent_pass()
+    #   for spr in DRAW.sort_back_to_front(alpha_sprites, key=lambda s: s.z):
+    #       spr.draw()                             # depth write OFF, alpha ON
+    #   window.end_depth_passes()                  # ripristina stato "normale"
+    #
+    # NOTA: il framebuffer del contesto deve avere un depth attachment.
+    # Se stai usando il default screen framebuffer di moderngl, va già bene.
+    # Se usi CameraGPU (FBO custom) e vuoi Early-Z anche dentro cam.begin(),
+    # devi ricreare l'FBO con un depth renderbuffer — vedi CameraGPU per la
+    # personalizzazione. Se non lo fai, il DEPTH_TEST resta attivo ma è un
+    # no-op sul FBO senza depth (nessuna regressione visiva).
+    def enable_early_z(self, enabled: bool = True) -> None:
+        """
+        Attiva/disattiva il Depth Test globale sul contesto moderngl.
+        Chiamalo una volta sola (es. dopo la creazione della WINDOW).
+        Retro-compatibile: se non lo chiami mai, il comportamento del motore
+        è identico a prima.
+        """
+        if not hasattr(self, "ctx") or self.ctx is None:
+            return
+        if enabled:
+            self.ctx.enable(moderngl.DEPTH_TEST)
+        else:
+            self.ctx.disable(moderngl.DEPTH_TEST)
+        self._early_z_enabled = bool(enabled)
+
+    def begin_opaque_pass(self) -> None:
+        """
+        Prepara il contesto per disegnare gli oggetti opachi (pass 1).
+        Depth write ON, depth func LESS: l'hardware scarta via Early-Z i pixel
+        già coperti da un oggetto più vicino (ordina front-to-back per max effetto).
+        """
+        ctx = getattr(self, "ctx", None)
+        if ctx is None:
+            return
+        ctx.enable(moderngl.DEPTH_TEST)
+        ctx.depth_func = "<"          # LESS
+        # moderngl non ha un flag depth_mask separato; l'assenza di
+        # DEPTH_TEST disattiva anche il write. Con DEPTH_TEST attivo,
+        # il write è ON di default. Nulla da fare qui.
+
+    def begin_transparent_pass(self) -> None:
+        """
+        Prepara il contesto per disegnare gli oggetti semitrasparenti (pass 2).
+        Il depth test resta ON (per non disegnare "dietro" al mondo opaco), ma
+        la scrittura del depth buffer va spenta per non impedire il corretto
+        alpha-blending tra oggetti trasparenti sovrapposti. Ordina back-to-front.
+
+        NOTA moderngl: non esiste un `depth_mask` diretto sul contesto; il
+        pattern portabile è usare `depth_func = "<="` (o `"always"` se vuoi
+        ignorare completamente l'occlusione) mantenendo il test attivo. Per
+        controllo fine chiama manualmente `glDepthMask(False)` via
+        `ctx.extra` se disponibile.
+        """
+        ctx = getattr(self, "ctx", None)
+        if ctx is None:
+            return
+        ctx.enable(moderngl.DEPTH_TEST)
+        ctx.depth_func = "<="
+
+    def end_depth_passes(self) -> None:
+        """
+        Ripristina lo stato di rendering "classico" (nessun depth test).
+        Chiamalo a fine frame se vuoi disegnare UI in ordine di draw call.
+        """
+        ctx = getattr(self, "ctx", None)
+        if ctx is None:
+            return
+        ctx.depth_func = "<"
+        if not getattr(self, "_early_z_enabled", False):
+            ctx.disable(moderngl.DEPTH_TEST)
+
+    # Helper statici di ordinamento — funzionano su qualunque iterable.
+    @staticmethod
+    def sort_front_to_back(items, key=None):
+        """
+        Ordina gli oggetti dal più vicino al più lontano (z crescente se
+        z=0 è "davanti"). Usa il risultato per il pass opaco.
+        """
+        if key is None:
+            key = lambda o: getattr(o, "z", 0.0)
+        return sorted(items, key=key)
+
+    @staticmethod
+    def sort_back_to_front(items, key=None):
+        """
+        Ordina gli oggetti dal più lontano al più vicino. Usa il risultato
+        per il pass alpha-blended.
+        """
+        if key is None:
+            key = lambda o: getattr(o, "z", 0.0)
+        return sorted(items, key=key, reverse=True)
+
+
 
     # BUG 7 fix: cache LRU generica (usata per angoli ellisse e bezier).
     @staticmethod
@@ -1398,7 +2511,7 @@ class DRAW:
         # Pipeline gemella di _init_rect_gpu: stessa architettura instanced,
         # così DrawRectsOutlineBatch ha le stesse prestazioni GPU-batch di
         # DrawRectsBatch (1 draw call instanced per chunk, packing via kernel
-        # Numba parallelo, nessun overhead Python per rettangolo).
+        # Numba compilato, nessun overhead Python per rettangolo).
         self.rect_outline_prog = self.ctx.program(
             vertex_shader="""
                 #version 330
@@ -1488,7 +2601,7 @@ class DRAW:
     def _init_rounded_rect_gpu(self):
         """Pipeline instanced per DrawRoundedRectsBatch. Stessa architettura
         di _init_rect_gpu (SDF nel fragment, quad unitario condiviso,
-        packing via kernel Numba parallelo): 1 draw call instanced per chunk."""
+        packing via kernel Numba compilato): 1 draw call instanced per chunk."""
         self.rrect_prog = self.ctx.program(
             vertex_shader="""
                 #version 330
@@ -2074,6 +3187,24 @@ class DRAW:
         )
         self.rect_count = 0
 
+        # Contatori CPU-accumulo per le forme arrotondate (rrect, rrect
+        # outline, rtri, rtri outline): stessa tecnica zero-alloc-a-runtime
+        # di self.rect_count / self._np_batch_buffer usata da DrawRect,
+        # DrawTriangle ecc. Le DrawRoundedRect/DrawRoundedTriangle ecc.
+        # 'immediate' scrivono qui invece di fare un Flush + upload + draw
+        # call GPU per OGNI singola chiamata.
+        self.rrect_count = 0
+        self.rrect_outline_count = 0
+        self.rtri_count = 0
+        self.rtri_outline_count = 0
+        # Traccia quale buffer CPU sta accumulando in questo momento
+        # ('quad', 'rrect', 'rrect_outline', 'rtri', 'rtri_outline' o None).
+        # Serve a preservare l'ordine di disegno (painter's algorithm):
+        # quando una Draw* cambia 'tipo' rispetto all'ultima, scarichiamo
+        # PRIMA tutti i buffer pendenti, cosi' le draw call GPU restano
+        # nello stesso ordine delle chiamate Draw* dell'utente.
+        self._active_kind = None
+
         # Cache angoli per ellissi e curve di Bezier — evita np.linspace ogni frame
         # BUG 7 fix: OrderedDict + _lru_cache_get implementano una vera LRU,
         # invece di svuotare tutta la cache quando si supera la capacità
@@ -2162,8 +3293,7 @@ class DRAW:
         `rot` è in GRADI, come ogni altro parametro `rotation`/`rot`
         dell'API (DrawRect, DrawEllipse, DrawRectsBatch, ...).
         """
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -2214,7 +3344,7 @@ class DRAW:
             inst[:, 6:10] = data[sl, 5:9]  # uv u0,v0,u1,v1
             inst[:, 10]  = alpha_arr[sl]    # alpha
 
-            self.sprite_inst_instance_vbo.write(memoryview(inst))
+            self.sprite_inst_instance_vbo.orphan(); self.sprite_inst_instance_vbo.write(memoryview(inst))
             self.sprite_inst_vao.render(instances=chunk)
             i += chunk
 
@@ -2330,8 +3460,7 @@ class DRAW:
 
         cos_r, sin_r = self._cos_sin_deg(rotation)
 
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -2356,7 +3485,7 @@ class DRAW:
         buf[:n, 12] = col_b
         buf[:n, 13] = col_a
 
-        self.sprite_inst_instance_vbo.write(memoryview(buf[:n]))
+        self.sprite_inst_instance_vbo.orphan(); self.sprite_inst_instance_vbo.write(memoryview(buf[:n]))
         self.sprite_inst_vao.render(instances=n)
 
     def DrawTextBatch(self, items):
@@ -2419,8 +3548,7 @@ class DRAW:
                                  out[offset:offset + n])
             offset += n
 
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -2430,7 +3558,7 @@ class DRAW:
         i = 0
         while i < total:
             chunk = min(self.max_rects, total - i)
-            self.sprite_inst_instance_vbo.write(memoryview(out[i:i + chunk]))
+            self.sprite_inst_instance_vbo.orphan(); self.sprite_inst_instance_vbo.write(memoryview(out[i:i + chunk]))
             self.sprite_inst_vao.render(instances=chunk)
             i += chunk
 
@@ -2460,7 +3588,14 @@ class DRAW:
         arr = np.frombuffer(raw, dtype=np.uint8).reshape((h, pitch))
         if pitch != w * 4:
             arr = arr[:, :w * 4]
-        pixels = arr.reshape((h, w, 4)).tobytes()
+        arr = arr.reshape((h, w, 4))
+        pixels = arr.tobytes()
+
+        # PIXEL-PERFECT: teniamo una copia SOLO del canale alpha (w*h byte,
+        # non w*h*4) lato CPU. E' l'unico dato che serve a CollidePointTexture
+        # / CollidePointTextureBatch per il test pixel-esatto: niente readback
+        # dalla GPU a runtime, niente ri-decodifica del file ad ogni hit-test.
+        alpha_ch = np.ascontiguousarray(arr[:, :, 3])
 
         tex = self.ctx.texture((w, h), 4, pixels)
         if filter_mode.upper() == "NEAREST":
@@ -2471,7 +3606,7 @@ class DRAW:
         if name in self._texture_cache:
             self._texture_cache[name][0].release()
 
-        self._texture_cache[name] = (tex, w, h)
+        self._texture_cache[name] = (tex, w, h, alpha_ch)
 
         sdl2.SDL_FreeFormat(format_ptr)
         sdl2.SDL_FreeSurface(conv_surf)
@@ -2480,7 +3615,7 @@ class DRAW:
     
     def UnloadTexture(self, name):
         if name in self._texture_cache:
-            tex, _, _ = self._texture_cache.pop(name)
+            tex, _, _, _ = self._texture_cache.pop(name)
             tex.release()
 
     def LoadTextureAtlas(self, name: str, filepath: str):
@@ -2538,14 +3673,19 @@ class DRAW:
     def DrawTexture(self, name: str, x: float, y: float,
                     w=None, h=None, rotation=0.0, alpha=255,
                     flip_x=False, flip_y=False):
-        # Svuota i primitivi pendenti PRIMA di passare alle texture
-        if self.rect_count > 0:
-            self.Flush()
+        # BUG FIX (painter's algorithm): usa lo stesso meccanismo _use_batch
+        # delle altre primitive. Se prima si stava accumulando un'altra
+        # famiglia (quad/rrect/rtri/...), _use_batch la scarica ORA; le
+        # chiamate successive a texture accumulano in tex_rect_count e
+        # verranno scaricate solo al prossimo cambio di famiglia o a
+        # FlushAll(). Cosi' l'ordine delle draw call rispecchia esattamente
+        # l'ordine delle chiamate Draw*, texture incluse.
+        self._use_batch('tex')
 
         if name not in self._texture_cache:
             return
 
-        tex, orig_w, orig_h = self._texture_cache[name]
+        tex, orig_w, orig_h, _ = self._texture_cache[name]
 
         if self.current_texture is not None and self.current_texture != tex:
             self.RefreshTextures()
@@ -2586,6 +3726,7 @@ class DRAW:
         self._check_finite(x, y, w, h, rotation, names=("x", "y", "w", "h", "rotation"))
         r, g, b, a = self._parse_color(color, alpha)
 
+        self._use_batch('quad')
         if self.rect_count >= self.max_rects:
             self.Flush()
 
@@ -2617,6 +3758,7 @@ class DRAW:
         iw, ih = max(w - 2*t, 0.0), max(h - 2*t, 0.0)
         ix0, iy0, ix1, iy1, ix2, iy2, ix3, iy3 = self._rotated_quad_corners(ix, iy, iw, ih, rotation)
 
+        self._use_batch('quad')
         if self.rect_count + 4 > self.max_rects:
             self.Flush()
 
@@ -2658,6 +3800,7 @@ class DRAW:
 
         r, g, b, a = self._parse_color(color, alpha)
 
+        self._use_batch('quad')
         if self.rect_count >= self.max_rects:
             self.Flush()
 
@@ -2684,6 +3827,7 @@ class DRAW:
 
         r, g, b, a = self._parse_color(color, alpha)
 
+        self._use_batch('quad')
         if self.rect_count >= self.max_rects:
             self.Flush()
 
@@ -2717,6 +3861,7 @@ class DRAW:
 
         r, g, b, a = self._parse_color(color, alpha)
 
+        self._use_batch('quad')
         if self.rect_count + 3 > self.max_rects:
             self.Flush()
 
@@ -2894,8 +4039,10 @@ class DRAW:
         """
         Normalizza e VALIDA colori/alpha per tutte le funzioni *Batch.
         Il clip 0-255 e la sovrascrittura alpha sono fatti da un kernel
-        Numba parallelo (_numba_clip_rgba), che elimina 3-4 passaggi
-        NumPy (clip x3, broadcast) su array grandi.
+        Numba compilato (_numba_clip_rgba), che elimina 3-4 passaggi
+        NumPy (clip x3, broadcast) su array grandi. Kernel sequenziale
+        (non parallel=True): a parita' di N tipico per-frame, il costo
+        fisso di dispatch dei thread supererebbe il lavoro da fare.
         """
         col = np.asarray(colors, dtype='f4')
         if col.ndim == 1:
@@ -3037,8 +4184,7 @@ class DRAW:
 
 
     def DrawRectsBatch(self, positions, sizes, colors, alpha=255, rotation=0.0):
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3071,7 +4217,7 @@ class DRAW:
         # FIX 3: u_resolution aggiornato una sola volta in SetResolution;
         # aggiornare lo uniform ad ogni chiamata batch è ridondante e spreca
         # un round-trip driver per frame senza alcun beneficio.
-        # Packing dell'instance buffer via kernel Numba parallelo.
+        # Packing dell'instance buffer via kernel Numba compilato.
         i = 0
         while i < n:
             chunk = min(self.max_rects, n - i)
@@ -3081,7 +4227,7 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst
             )
-            self.rect_inst_instance_vbo.write(memoryview(inst))
+            self.rect_inst_instance_vbo.orphan(); self.rect_inst_instance_vbo.write(memoryview(inst))
             self.rect_inst_vao.render(instances=chunk)
             i += chunk
 
@@ -3090,8 +4236,7 @@ class DRAW:
         architettura GPU-instanced (packing vettoriale via kernel Numba
         parallelo + un'unica render(instances=chunk) per chunk): stessa
         fascia di prestazioni Batch di DrawRectsBatch."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3136,7 +4281,7 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst
             )
-            self.rect_outline_instance_vbo.write(memoryview(inst))
+            self.rect_outline_instance_vbo.orphan(); self.rect_outline_instance_vbo.write(memoryview(inst))
             self.rect_outline_vao.render(instances=chunk)
             i += chunk
 
@@ -3145,11 +4290,10 @@ class DRAW:
     def DrawRoundedRectsBatch(self, positions, sizes, radius,
                               colors, alpha=255, rotation=0.0):
         """Versione GPU-instanced per rettangoli arrotondati. Stessa
-        architettura di DrawRectsBatch (packing Numba parallelo +
+        architettura di DrawRectsBatch (packing Numba compilato +
         1 draw call instanced per chunk). `radius` puo' essere scalare
         oppure array di lunghezza n."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3194,37 +4338,47 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst,
             )
-            self.rrect_instance_vbo.write(memoryview(inst))
+            self.rrect_instance_vbo.orphan(); self.rrect_instance_vbo.write(memoryview(inst))
             self.rrect_vao.render(instances=chunk)
             i += chunk
 
     def DrawRoundedRect(self, x, y, w, h, radius,
                         color=(255, 255, 255, 255), rotation=0.0, alpha=255):
-        """Versione 'immediate' di DrawRoundedRectsBatch (1 istanza).
-        Delega alla pipeline batch per garantire che il bordo sia identico
-        alla versione batch (stesso SDF, stesso AA, stesso shader)."""
+        """Versione 'immediate' di DrawRoundedRectsBatch. Accumula l'istanza
+        in un buffer CPU pre-allocato (stessa tecnica zero-alloc di
+        DrawRect/self._np_batch_buffer) invece di fare Flush + upload VBO +
+        draw call GPU per OGNI singola chiamata: N chiamate consecutive
+        diventano UNA sola draw call instanced quando il buffer viene
+        scaricato (buffer pieno, cambio di primitiva o Flush/FlushAll).
+        Stesso SDF/AA/shader della versione batch: bordo identico."""
         self._check_finite(x, y, w, h, radius, rotation,
                            names=("x", "y", "w", "h", "radius", "rotation"))
         if radius < 0:
             raise ValueError(f"radius must be >= 0 (got {radius})")
-        self.DrawRoundedRectsBatch(
-            np.array([[x, y]], dtype='f4'),
-            np.array([[w, h]], dtype='f4'),
-            np.array([radius], dtype='f4'),
-            color,
-            alpha=alpha,
-            rotation=rotation,
-        )
+
+        self._use_batch('rrect')
+        if self.rrect_count >= self.max_rects:
+            self._flush_rrect()
+
+        r, g, b, a = self._parse_color(color, alpha)
+        cs, sn = self._cos_sin_deg(rotation)
+
+        row = self.rrect_instance_data[self.rrect_count]
+        row[0] = x;  row[1] = y
+        row[2] = w;  row[3] = h
+        row[4] = radius
+        row[5] = cs; row[6] = sn
+        row[7] = r;  row[8] = g; row[9] = b; row[10] = a
+        self.rrect_count += 1
 
     def DrawRoundedRectsOutlineBatch(self, positions, sizes, radius, colors,
                                      thickness=1.0, alpha=255, rotation=0.0):
         """Versione 'solo bordo' di DrawRoundedRectsBatch. Stessa architettura
-        instanced (packing Numba parallelo + 1 draw call per chunk). Il bordo
+        instanced (packing Numba compilato + 1 draw call per chunk). Il bordo
         usa la stessa formula outerA*(1-innerA) di DrawRectsOutlineBatch:
         garantisce che il bordo del rettangolo arrotondato sia visivamente
         identico al bordo di un rettangolo dritto quando radius=0."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3279,15 +4433,17 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst,
             )
-            self.rrect_outline_instance_vbo.write(memoryview(inst))
+            self.rrect_outline_instance_vbo.orphan(); self.rrect_outline_instance_vbo.write(memoryview(inst))
             self.rrect_outline_vao.render(instances=chunk)
             i += chunk
 
     def DrawRoundedRectOutline(self, x, y, w, h, radius, thickness=1.0,
                                color=(255, 255, 255, 255), rotation=0.0,
                                alpha=255):
-        """Versione 'immediate' di DrawRoundedRectsOutlineBatch (1 istanza).
-        Delega alla pipeline batch (stesso shader/AA/bordo)."""
+        """Versione 'immediate' di DrawRoundedRectsOutlineBatch. Accumula in
+        CPU come DrawRoundedRect: stessa fascia di prestazioni delle altre
+        primitive non-Batch (DrawRectOutline ecc.), stesso shader/AA/bordo
+        della versione batch."""
         self._check_finite(x, y, w, h, radius, thickness, rotation,
                            names=("x", "y", "w", "h", "radius",
                                   "thickness", "rotation"))
@@ -3295,19 +4451,25 @@ class DRAW:
             raise ValueError(f"radius must be >= 0 (got {radius})")
         if thickness <= 0:
             raise ValueError(f"thickness must be > 0 (got {thickness})")
-        self.DrawRoundedRectsOutlineBatch(
-            np.array([[x, y]], dtype='f4'),
-            np.array([[w, h]], dtype='f4'),
-            np.array([radius], dtype='f4'),
-            color,
-            thickness=thickness,
-            alpha=alpha,
-            rotation=rotation,
-        )
+
+        self._use_batch('rrect_outline')
+        if self.rrect_outline_count >= self.max_rects:
+            self._flush_rrect_outline()
+
+        r, g, b, a = self._parse_color(color, alpha)
+        cs, sn = self._cos_sin_deg(rotation)
+
+        row = self.rrect_outline_instance_data[self.rrect_outline_count]
+        row[0] = x;  row[1] = y
+        row[2] = w;  row[3] = h
+        row[4] = radius
+        row[5] = thickness
+        row[6] = cs; row[7] = sn
+        row[8] = r;  row[9] = g; row[10] = b; row[11] = a
+        self.rrect_outline_count += 1
 
     def DrawLinesBatch(self, x1, y1, x2, y2, colors, thickness=1.0, alpha=255, rotation=0.0):
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3374,14 +4536,13 @@ class DRAW:
                 x2[i:i+chunk], y2[i:i+chunk],
                 thick[i:i+chunk], rgba[i:i+chunk], inst
             )
-            self.line_inst_instance_vbo.write(memoryview(inst))
+            self.line_inst_instance_vbo.orphan(); self.line_inst_instance_vbo.write(memoryview(inst))
             self.line_inst_vao.render(instances=chunk)
             i += chunk
 
 
     def DrawTrianglesBatch(self, vertices, colors, alpha=255):
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3421,7 +4582,7 @@ class DRAW:
                 v2[i:i+chunk],
                 rgba[i:i+chunk], inst
             )
-            self.tri_inst_instance_vbo.write(memoryview(inst))
+            self.tri_inst_instance_vbo.orphan(); self.tri_inst_instance_vbo.write(memoryview(inst))
             self.tri_inst_vao.render(vertices=3, instances=chunk)
             i += chunk
 
@@ -3433,8 +4594,7 @@ class DRAW:
         _numba_pack_line_instances + render instanced) — stessa fascia di
         prestazioni Batch del resto del motore. Nota: gli angoli non sono
         mitrati, coerente con DrawLinesBatch/DrawTriangleOutline."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3483,14 +4643,14 @@ class DRAW:
                 p1[i:i+chunk], p2[i:i+chunk],
                 thick3[i:i+chunk], rgba3[i:i+chunk], inst
             )
-            self.line_inst_instance_vbo.write(memoryview(inst))
+            self.line_inst_instance_vbo.orphan(); self.line_inst_instance_vbo.write(memoryview(inst))
             self.line_inst_vao.render(instances=chunk)
             i += chunk
 
 
     def DrawRoundedTrianglesBatch(self, vertices, radius, colors, alpha=255):
         """Versione GPU-instanced per triangoli con angoli arrotondati.
-        Stessa architettura di DrawTrianglesBatch (packing Numba parallelo +
+        Stessa architettura di DrawTrianglesBatch (packing Numba compilato +
         1 draw call instanced per chunk). Ogni istanza:
           - CPU (Numba) calcola i 3 vertici 'shrunk' (spinta dei lati verso
             l'interno di r_eff) e l'AABB del triangolo originale;
@@ -3498,8 +4658,7 @@ class DRAW:
             fragment shader, con AA fwidth-based (identico alle altre
             primitive del motore).
         `radius` puo' essere scalare o array di lunghezza n."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3540,17 +4699,22 @@ class DRAW:
                 v0[i:i+chunk], v1[i:i+chunk], v2[i:i+chunk],
                 rad[i:i+chunk], rgba[i:i+chunk], inst,
             )
-            self.rtri_instance_vbo.write(memoryview(inst))
+            self.rtri_instance_vbo.orphan(); self.rtri_instance_vbo.write(memoryview(inst))
             self.rtri_vao.render(instances=chunk)
             i += chunk
 
     def DrawRoundedTriangle(self, x1, y1, x2, y2, x3, y3, radius,
                             color=(255, 255, 255, 255),
                             rotation=0.0, alpha=255):
-        """Versione 'immediate' di DrawRoundedTrianglesBatch (1 istanza).
-        La rotazione ruota i 3 vertici attorno al centroide sulla CPU
-        (identico a DrawTriangle), poi delega alla pipeline batch: bordo
-        e AA identici alla versione batch."""
+        """Versione 'immediate' di DrawRoundedTrianglesBatch. La rotazione
+        ruota i 3 vertici attorno al centroide sulla CPU (identico a
+        DrawTriangle), poi accumula l'istanza in un buffer CPU pre-allocato
+        (stessa tecnica zero-alloc di DrawTriangle/self._np_batch_buffer)
+        invece di fare Flush + upload VBO + draw call GPU per OGNI singola
+        chiamata. Riusa direttamente il kernel scalare Numba
+        _rtri_shrink_and_aabb (lo stesso usato da DrawRoundedTrianglesBatch,
+        solo senza il giro per gli array paralleli): bordo e AA identici
+        alla versione batch."""
         self._check_finite(x1, y1, x2, y2, x3, y3, radius, rotation,
                            names=("x1", "y1", "x2", "y2", "x3", "y3",
                                   "radius", "rotation"))
@@ -3565,8 +4729,24 @@ class DRAW:
             x1 = cx + dx1*cs - dy1*sn; y1 = cy + dx1*sn + dy1*cs
             x2 = cx + dx2*cs - dy2*sn; y2 = cy + dx2*sn + dy2*cs
             x3 = cx + dx3*cs - dy3*sn; y3 = cy + dx3*sn + dy3*cs
-        verts = np.array([[[x1, y1], [x2, y2], [x3, y3]]], dtype='f4')
-        self.DrawRoundedTrianglesBatch(verts, radius, color, alpha=alpha)
+
+        self._use_batch('rtri')
+        if self.rtri_count >= self.max_rects:
+            self._flush_rtri()
+
+        r, g, b, a = self._parse_color(color, alpha)
+        (sax, say, sbx, sby, scx, scy, r_eff,
+         mnx, mny, mxx, mxy) = _rtri_shrink_and_aabb(x1, y1, x2, y2, x3, y3, radius)
+
+        row = self.rtri_instance_data[self.rtri_count]
+        row[0]  = sax; row[1]  = say
+        row[2]  = sbx; row[3]  = sby
+        row[4]  = scx; row[5]  = scy
+        row[6]  = r_eff
+        row[7]  = mnx; row[8]  = mny
+        row[9]  = mxx; row[10] = mxy
+        row[11] = r; row[12] = g; row[13] = b; row[14] = a
+        self.rtri_count += 1
 
     def DrawRoundedTrianglesOutlineBatch(self, vertices, radius, colors,
                                          thickness=1.0, alpha=255):
@@ -3574,8 +4754,7 @@ class DRAW:
         architettura instanced. Il bordo usa la stessa formula
         outerA*(1-innerA) di DrawRectsOutlineBatch/DrawRoundedRectsOutlineBatch
         (coerenza visiva del bordo su tutte le primitive)."""
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3626,7 +4805,7 @@ class DRAW:
                 rad[i:i+chunk], thick[i:i+chunk],
                 rgba[i:i+chunk], inst,
             )
-            self.rtri_outline_instance_vbo.write(memoryview(inst))
+            self.rtri_outline_instance_vbo.orphan(); self.rtri_outline_instance_vbo.write(memoryview(inst))
             self.rtri_outline_vao.render(instances=chunk)
             i += chunk
 
@@ -3634,8 +4813,10 @@ class DRAW:
                                    thickness=1.0,
                                    color=(255, 255, 255, 255),
                                    rotation=0.0, alpha=255):
-        """Versione 'immediate' di DrawRoundedTrianglesOutlineBatch (1 istanza).
-        La rotazione ruota i 3 vertici attorno al centroide sulla CPU."""
+        """Versione 'immediate' di DrawRoundedTrianglesOutlineBatch. Accumula
+        in CPU come DrawRoundedTriangle: stessa fascia di prestazioni delle
+        altre primitive non-Batch. La rotazione ruota i 3 vertici attorno
+        al centroide sulla CPU."""
         self._check_finite(x1, y1, x2, y2, x3, y3, radius, thickness, rotation,
                            names=("x1", "y1", "x2", "y2", "x3", "y3",
                                   "radius", "thickness", "rotation"))
@@ -3652,9 +4833,25 @@ class DRAW:
             x1 = cx + dx1*cs - dy1*sn; y1 = cy + dx1*sn + dy1*cs
             x2 = cx + dx2*cs - dy2*sn; y2 = cy + dx2*sn + dy2*cs
             x3 = cx + dx3*cs - dy3*sn; y3 = cy + dx3*sn + dy3*cs
-        verts = np.array([[[x1, y1], [x2, y2], [x3, y3]]], dtype='f4')
-        self.DrawRoundedTrianglesOutlineBatch(
-            verts, radius, color, thickness=thickness, alpha=alpha)
+
+        self._use_batch('rtri_outline')
+        if self.rtri_outline_count >= self.max_rects:
+            self._flush_rtri_outline()
+
+        r, g, b, a = self._parse_color(color, alpha)
+        (sax, say, sbx, sby, scx, scy, r_eff,
+         mnx, mny, mxx, mxy) = _rtri_shrink_and_aabb(x1, y1, x2, y2, x3, y3, radius)
+
+        row = self.rtri_outline_instance_data[self.rtri_outline_count]
+        row[0]  = sax; row[1]  = say
+        row[2]  = sbx; row[3]  = sby
+        row[4]  = scx; row[5]  = scy
+        row[6]  = r_eff
+        row[7]  = mnx; row[8]  = mny
+        row[9]  = mxx; row[10] = mxy
+        row[11] = thickness
+        row[12] = r; row[13] = g; row[14] = b; row[15] = a
+        self.rtri_outline_count += 1
 
     def DrawEllipsesBatch(self, centers, radii, colors, segments=None, alpha=255, rotation=0.0):
         """
@@ -3675,8 +4872,7 @@ class DRAW:
                 stacklevel=2
             )
 
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3735,7 +4931,7 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst
             )
-            self.ellipse_instance_vbo.write(memoryview(inst))
+            self.ellipse_instance_vbo.orphan(); self.ellipse_instance_vbo.write(memoryview(inst))
             self.ellipse_vao.render(mode=moderngl.TRIANGLES, instances=chunk)
             i += chunk
 
@@ -3836,8 +5032,7 @@ class DRAW:
         esatti, non una mesh poligonale) — stessa identica architettura e
         fascia di prestazioni Batch di DrawEllipsesBatch.
         """
-        if self.rect_count > 0:
-            self.Flush()
+        self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
 
@@ -3903,7 +5098,7 @@ class DRAW:
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
                 rgba[i:i+chunk], inst
             )
-            self.ellipse_outline_instance_vbo.write(memoryview(inst))
+            self.ellipse_outline_instance_vbo.orphan(); self.ellipse_outline_instance_vbo.write(memoryview(inst))
             self.ellipse_outline_vao.render(mode=moderngl.TRIANGLES, instances=chunk)
             i += chunk
 
@@ -3990,6 +5185,11 @@ class DRAW:
         """4. COMPITO: Resetta/Annulla il disegno corrente svuotando i contatori senza mandare nulla alla GPU."""
         self.rect_count = 0
         self.tex_rect_count = 0
+        self.rrect_count = 0
+        self.rrect_outline_count = 0
+        self.rtri_count = 0
+        self.rtri_outline_count = 0
+        self._active_kind = None
 
 
     def RefreshTextures(self):
@@ -4000,7 +5200,7 @@ class DRAW:
         self.tex_prog["u_tex"].value = 0
 
         view = self._np_tex_buffer[:self.tex_rect_count]
-        self.tex_vbo.write(memoryview(view))
+        self.tex_vbo.orphan(); self.tex_vbo.write(memoryview(view))
         self.tex_vao.render(vertices=self.tex_rect_count * 6)
         self.tex_rect_count = 0
 
@@ -4009,16 +5209,95 @@ class DRAW:
             return
 
         view = self._np_batch_buffer[:self.rect_count]
-        self.rect_vbo.write(memoryview(view))
+        self.rect_vbo.orphan(); self.rect_vbo.write(memoryview(view))
         self.rect_vao.render(vertices=self.rect_count * 6)
         self.rect_count = 0
 
-    def FlushAll(self):
-        """3. COMPITO: Disegna tutto. Coordina i buffer nell'ordine corretto per i layer."""
+    def _flush_rrect(self):
+        """Scarica l'accumulo CPU di DrawRoundedRect verso la GPU: UNA sola
+        draw call instanced per N rettangoli arrotondati accumulati, invece
+        di una draw call per ognuno (stessa tecnica di Flush())."""
+        if self.rrect_count == 0:
+            return
+        inst = self.rrect_instance_data[:self.rrect_count]
+        self.rrect_instance_vbo.orphan(); self.rrect_instance_vbo.write(memoryview(inst))
+        self.rrect_vao.render(instances=self.rrect_count)
+        self.rrect_count = 0
+
+    def _flush_rrect_outline(self):
+        """Equivalente di _flush_rrect() per DrawRoundedRectOutline."""
+        if self.rrect_outline_count == 0:
+            return
+        inst = self.rrect_outline_instance_data[:self.rrect_outline_count]
+        self.rrect_outline_instance_vbo.orphan(); self.rrect_outline_instance_vbo.write(memoryview(inst))
+        self.rrect_outline_vao.render(instances=self.rrect_outline_count)
+        self.rrect_outline_count = 0
+
+    def _flush_rtri(self):
+        """Equivalente di _flush_rrect() per DrawRoundedTriangle."""
+        if self.rtri_count == 0:
+            return
+        inst = self.rtri_instance_data[:self.rtri_count]
+        self.rtri_instance_vbo.orphan(); self.rtri_instance_vbo.write(memoryview(inst))
+        self.rtri_vao.render(instances=self.rtri_count)
+        self.rtri_count = 0
+
+    def _flush_rtri_outline(self):
+        """Equivalente di _flush_rrect() per DrawRoundedTriangleOutline."""
+        if self.rtri_outline_count == 0:
+            return
+        inst = self.rtri_outline_instance_data[:self.rtri_outline_count]
+        self.rtri_outline_instance_vbo.orphan(); self.rtri_outline_instance_vbo.write(memoryview(inst))
+        self.rtri_outline_vao.render(instances=self.rtri_outline_count)
+        self.rtri_outline_count = 0
+
+    def FlushRounded(self):
+        """Scarica tutti e 4 gli accumulatori CPU delle forme arrotondate
+        (rrect, rrect outline, rtri, rtri outline) verso la GPU. Puo' essere
+        chiamato esplicitamente, ma normalmente ci pensano FlushAll() e il
+        cambio di 'tipo' di disegno (_use_batch) a chiamarlo al momento
+        giusto."""
+        self._flush_rrect()
+        self._flush_rrect_outline()
+        self._flush_rtri()
+        self._flush_rtri_outline()
+
+    def _use_batch(self, kind):
+        """Chiamato in testa a ogni Draw* 'immediate' che accumula in un
+        buffer CPU (DrawRect/DrawLine/DrawTriangle/*Outline -> 'quad',
+        DrawRoundedRect -> 'rrect', ecc.). Se il tipo di disegno cambia
+        rispetto all'ultima primitiva accumulata, scarica PRIMA tutti i
+        buffer pendenti sulla GPU: cosi' le draw call restano nello stesso
+        ordine delle chiamate Draw* (painter's algorithm), anche se ogni
+        forma arrotondata ora usa un VAO/shader separato dal quad piatto."""
+        if self._active_kind is not None and self._active_kind != kind:
+            self._flush_pending_draws()
+        self._active_kind = kind
+
+    def _flush_pending_draws(self):
+        # BUG FIX (painter's algorithm): grazie al meccanismo _use_batch,
+        # a ogni istante al piu' UNA di queste famiglie ha dati accumulati
+        # (quella corrispondente a self._active_kind). L'ordine relativo
+        # delle chiamate qui sotto non altera quindi il painter's algorithm:
+        # gli altri contatori sono sempre 0. Le texture ora sono incluse.
         if self.tex_rect_count > 0:
             self.RefreshTextures()
         if self.rect_count > 0:
             self.Flush()
+        self.FlushRounded()
+        self._active_kind = None
+
+    def FlushAll(self):
+        """3. COMPITO: Disegna tutto quello che e' ancora accumulato.
+        Grazie a _use_batch, a fine frame solo una famiglia ha dati
+        pendenti: quale sia dipende dall'ultima chiamata Draw*, quindi
+        l'ordine di questi flush non e' significativo."""
+        if self.tex_rect_count > 0:
+            self.RefreshTextures()
+        if self.rect_count > 0:
+            self.Flush()
+        self.FlushRounded()
+        self._active_kind = None
 
     def SetResolution(self, width, height):
         self.size = (width, height)
@@ -4060,7 +5339,7 @@ class DRAW:
         self._bezier_cache.clear()
 
         if hasattr(self, "_texture_cache"):
-            for tex_obj, _, _ in self._texture_cache.values():
+            for tex_obj, _, _, _ in self._texture_cache.values():
                 try:
                     tex_obj.release()
                 except Exception:
@@ -4521,14 +5800,31 @@ class DRAW:
         has_pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
         return ~(has_neg & has_pos)
 
-    def CollidePointRotatedRectBatch(self, px_arr, py_arr, rx, ry, rw, rh, rotation):
+    def CollidePointRotatedRectBatch(self, px_arr, py_arr, rx, ry, rw, rh, rotation=0.0):
+        """Batch Point-vs-RotatedRect. `rotation` puo' essere UNO scalare
+        (stessa rotazione per tutte le N rect, comportamento originale) OPPURE
+        un array (N,) con una rotazione diversa per ogni rect.
+
+        FIX COERENZA/PERF: la versione precedente faceva `float(rotation)`,
+        quindi accettava SOLO uno scalare — passare un array (anche di soli
+        zeri) sollevava TypeError ("only 0-dimensional arrays can be
+        converted..."). Ora, come in CollidePointEllipseBatch, la
+        trigonometria viene saltata del tutto se tutte le rotazioni sono 0
+        (caso comunissimo: batch di rect assi-allineati), quindi nessuna
+        regressione di prestazioni sul percorso già esistente."""
         px = np.asarray(px_arr, dtype='f4'); py = np.asarray(py_arr, dtype='f4')
+        rx = np.asarray(rx, dtype='f4'); ry = np.asarray(ry, dtype='f4')
+        rw = np.asarray(rw, dtype='f4'); rh = np.asarray(rh, dtype='f4')
         cx = rx + rw * 0.5; cy = ry + rh * 0.5
-        ang = -float(rotation) * _DEG2RAD_CONST
-        cs = math.cos(ang); sn = math.sin(ang)
         dx = px - cx; dy = py - cy
-        lx = dx * cs - dy * sn
-        ly = dx * sn + dy * cs
+        rot = np.asarray(rotation, dtype='f4')
+        if np.any(rot != 0.0):
+            ang = -rot * np.float32(_DEG2RAD_CONST)
+            cs = np.cos(ang); sn = np.sin(ang)
+            lx = dx * cs - dy * sn
+            ly = dx * sn + dy * cs
+        else:
+            lx, ly = dx, dy
         hw = rw * 0.5; hh = rh * 0.5
         return (np.abs(lx) <= hw) & (np.abs(ly) <= hh)
 
@@ -4675,5 +5971,304 @@ class DRAW:
                 return False
         return True
 
-    def CollidePointTexture(self, px,py,tx,ty,tw,th,rotation=0.0):
-        return self.CollidePointRotatedRect(px,py,tx,ty,tw,th,rotation)
+    def CollidePointTexture(self, px, py, name, tx, ty, tw=None, th=None,
+                            rotation=0.0, flip_x=False, flip_y=False,
+                            alpha_threshold=1):
+        """Point-vs-Texture PIXEL-PERFECT.
+
+        Prima uno scarto economico contro il rotated-rect di bounding
+        (stesso costo di CollidePointRotatedRect: 1 mul/add per punto), poi
+        SOLO se il punto e' dentro il rettangolo si fa un singolo lookup nel
+        canale alpha tenuto in CPU (popolato da LoadTexture) — zero readback
+        dalla GPU, zero riapertura del file su disco ad ogni hit-test.
+
+        Parametri
+        ---------
+        name : str
+            Nome della texture (quello passato a LoadTexture/DrawTexture).
+        tx, ty, tw, th : float
+            Posizione e dimensioni A SCHERMO con cui la texture e' stata
+            disegnata (tw/th default = dimensione naturale, come DrawTexture).
+        rotation : float
+            Gradi, stessa convenzione di CollidePointRotatedRect/DrawTexture.
+        alpha_threshold : int
+            Valore alpha (0-255) sopra il quale il pixel conta come "pieno".
+            Default 1 = qualunque pixel non totalmente trasparente.
+
+        Ritorna False (nessuna eccezione) se `name` non e' in cache: comodo
+        per chiamare la funzione senza dover controllare prima l'esistenza
+        della texture.
+        """
+        entry = self._texture_cache.get(name)
+        if entry is None:
+            return False
+        _tex, orig_w, orig_h, alpha_ch = entry
+
+        w = orig_w if tw is None else tw
+        h = orig_h if th is None else th
+        if w <= 0.0 or h <= 0.0:
+            return False
+
+        cx = tx + w * 0.5
+        cy = ty + h * 0.5
+        ang = -float(rotation) * _DEG2RAD_CONST
+        cs = math.cos(ang); sn = math.sin(ang)
+        dx = px - cx; dy = py - cy
+        local_x = cx + dx * cs - dy * sn
+        local_y = cy + dx * sn + dy * cs
+
+        # Early-out: identico a CollidePointRotatedRect, ma teniamo local_x/y
+        # calcolati qui per non rifare cos/sin una seconda volta sotto.
+        if not self.PointInRect(local_x, local_y, tx, ty, w, h):
+            return False
+
+        u = (local_x - tx) / w
+        v = (local_y - ty) / h
+        if flip_x: u = 1.0 - u
+        if flip_y: v = 1.0 - v
+
+        col = int(u * orig_w)
+        row = int(v * orig_h)
+        if col < 0 or col >= orig_w or row < 0 or row >= orig_h:
+            return False
+
+        return bool(alpha_ch[row, col] >= alpha_threshold)
+
+    def CollidePointTextureBatch(self, px_arr, py_arr, name, x_arr, y_arr,
+                                 w_arr=None, h_arr=None, rotation_arr=0.0,
+                                 flip_x=False, flip_y=False,
+                                 alpha_threshold=1):
+        """Batch PIXEL-PERFECT: un punto (es. il mouse) contro N istanze
+        della STESSA texture (tile picking, selezione unita' in un RTS,
+        hit-test su uno sciame di sprite condiviso, ecc.).
+
+        px_arr/py_arr possono essere scalari (es. mouse.x, mouse.y) o array
+        della stessa lunghezza di x_arr/y_arr — broadcasting NumPy standard.
+
+        Strategia in 2 stadi, stesso spirito di CollidePointTexture: lo
+        stadio 1 (rotated-rect, vettoriale) scarta in un colpo solo la
+        stragrande maggioranza delle istanze; lo stadio 2 (lookup alpha)
+        gira SOLO sui sopravvissuti, non su tutti gli N.
+        """
+        entry = self._texture_cache.get(name)
+        x_arr = np.asarray(x_arr, dtype='f4')
+        n = x_arr.shape[0]
+        if entry is None:
+            return np.zeros(n, dtype=bool)
+        _tex, orig_w, orig_h, alpha_ch = entry
+
+        y_arr = np.asarray(y_arr, dtype='f4')
+        w_arr = np.full(n, orig_w, dtype='f4') if w_arr is None else np.asarray(w_arr, dtype='f4')
+        h_arr = np.full(n, orig_h, dtype='f4') if h_arr is None else np.asarray(h_arr, dtype='f4')
+        rot_arr = np.broadcast_to(np.asarray(rotation_arr, dtype='f4'), (n,))
+
+        # Stadio 1: early-out vettoriale (stesso costo di CollidePointRotatedRectBatch)
+        hits = self.CollidePointRotatedRectBatch(px_arr, py_arr, x_arr, y_arr, w_arr, h_arr, rot_arr)
+        out = np.zeros(n, dtype=bool)
+        idx = np.nonzero(hits)[0]
+        if idx.size == 0:
+            return out
+
+        px = np.broadcast_to(np.asarray(px_arr, dtype='f4'), (n,))[idx]
+        py = np.broadcast_to(np.asarray(py_arr, dtype='f4'), (n,))[idx]
+        xi = x_arr[idx]; yi = y_arr[idx]; wi = w_arr[idx]; hi = h_arr[idx]
+
+        cx = xi + wi * 0.5; cy = yi + hi * 0.5
+        ang = -rot_arr[idx] * np.float32(_DEG2RAD_CONST)
+        cs = np.cos(ang); sn = np.sin(ang)
+        ddx = px - cx; ddy = py - cy
+        local_x = cx + ddx * cs - ddy * sn
+        local_y = cy + ddx * sn + ddy * cs
+
+        u = (local_x - xi) / wi
+        v = (local_y - yi) / hi
+        if flip_x: u = 1.0 - u
+        if flip_y: v = 1.0 - v
+
+        col = (u * orig_w).astype(np.int32)
+        row = (v * orig_h).astype(np.int32)
+        valid = (col >= 0) & (col < orig_w) & (row >= 0) & (row < orig_h)
+
+        sub_idx = idx[valid]
+        out[sub_idx] = alpha_ch[row[valid], col[valid]] >= alpha_threshold
+        return out
+    # ================================================================
+    # PE_COLLISION — API pubblica (integrata da PE_COLLISION.py)
+    # ================================================================
+    # Nel modulo originale queste erano funzioni sciolte con un singleton
+    # globale (_RUNTIME) + bind_draw()/bind_window() per registrare quale
+    # istanza DRAW usare. Qui `self' e' sempre il contesto draw/mouse: ogni
+    # istanza DRAW/WINDOW tiene il proprio stato mouse, senza registrazioni
+    # globali e senza rischio che piu' finestre si "rubino" lo stato.
+    #
+    # Le forme (Point, Rect, RotRect, Circle, Ellipse, Line, Triangle,
+    # RoundedRect, Polygon, TextureCollider) sono agganciate come attributi
+    # di classe subito dopo la definizione di DRAW (vedi fondo del file):
+    # `draw.Rect(...)`, `draw.Circle(...)` ecc. funzionano su qualunque
+    # istanza, oltre a restare importabili a livello di modulo.
+
+    def _ensure_collision_state(self):
+        """Inizializza lo stato mouse per-istanza al primo utilizzo (lazy,
+        cosi' DRAW usato senza WINDOW/mouse non paga nulla)."""
+        if getattr(self, "_col_ready", False):
+            return
+        self._mouse_x = 0.0; self._mouse_y = 0.0
+        self._mouse_prev_x = 0.0; self._mouse_prev_y = 0.0
+        self._mouse_buttons_down = set()
+        self._mouse_buttons_pressed = set()
+        self._mouse_buttons_released = set()
+        self._mouse_wheel_x = 0.0; self._mouse_wheel_y = 0.0
+        self._mouse_wheel_event = False
+        self._col_ready = True
+
+    def UpdateMouseState(self, mouse_x, mouse_y, events):
+        """Da chiamare UNA VOLTA per frame (tipicamente in Loop(), PRIMA di
+        update()/draw()) per alimentare MouseOver/MousePressed/
+        MouseReleased/MouseClicked/MouseHeld/MouseDragging/MouseWheelOn.
+
+        mouse_x, mouse_y : posizione corrente del cursore (es. da
+                            SDL_GetMouseState), usata come fallback quando
+                            nel frame non arrivano eventi mouse.
+        events            : lista di PE_Event del frame corrente (PE_WINDOW
+                            la costruisce gia' in Loop()).
+        """
+        self._ensure_collision_state()
+        self._mouse_prev_x = self._mouse_x
+        self._mouse_prev_y = self._mouse_y
+        self._mouse_x = float(mouse_x)
+        self._mouse_y = float(mouse_y)
+        self._mouse_buttons_pressed = set()
+        self._mouse_buttons_released = set()
+        self._mouse_wheel_x = 0.0
+        self._mouse_wheel_y = 0.0
+        self._mouse_wheel_event = False
+
+        for e in events:
+            et = getattr(e, "type", None)
+            if et == PE_MOUSEBUTTONDOWN:
+                b = e.button
+                self._mouse_buttons_down.add(b)
+                self._mouse_buttons_pressed.add(b)
+                self._mouse_x = float(e.x); self._mouse_y = float(e.y)
+            elif et == PE_MOUSEBUTTONUP:
+                b = e.button
+                self._mouse_buttons_down.discard(b)
+                self._mouse_buttons_released.add(b)
+                self._mouse_x = float(e.x); self._mouse_y = float(e.y)
+            elif et in (PE_MOUSEMOTION, PE_MOUSEDRAG):
+                self._mouse_x = float(e.x); self._mouse_y = float(e.y)
+            elif et == PE_MOUSEWHEEL:
+                self._mouse_wheel_x = float(e.wheel_x)
+                self._mouse_wheel_y = float(e.wheel_y)
+                self._mouse_wheel_event = True
+                self._mouse_x = float(e.x); self._mouse_y = float(e.y)
+
+    def MousePosition(self):
+        """Ritorna (x, y) posizione mouse corrente in coordinate finestra."""
+        self._ensure_collision_state()
+        return self._mouse_x, self._mouse_y
+
+    def _mouse_point(self):
+        self._ensure_collision_state()
+        return Point(self._mouse_x, self._mouse_y)
+
+    def CheckCollision(self, a, b, show=False, color=(0, 255, 0, 255),
+                       thickness=2.0):
+        """Rileva collisione fra due forme qualsiasi (Point, Rect, RotRect,
+        Circle, Ellipse, Line, Triangle, RoundedRect, Polygon,
+        TextureCollider). Se show=True disegna il contorno di entrambe.
+
+        Esempio
+        -------
+            if draw.CheckCollision(player_rect, enemy_circle):
+                player.hp -= 1
+        """
+        result = _dispatch(a, b, self)
+        if show:
+            _draw_shape_outline(self, a, color, thickness)
+            _draw_shape_outline(self, b, color, thickness)
+        return result
+
+    def MouseOver(self, shape, show=False, color=(0, 255, 255, 255),
+                  thickness=2.0):
+        """True se il cursore del mouse e' attualmente SOPRA la forma."""
+        hit = _dispatch(self._mouse_point(), shape, self)
+        if show:
+            _draw_shape_outline(self, shape, color, thickness)
+        return hit
+
+    def MousePressed(self, shape, button=PE_MOUSE_LEFT, show=False,
+                     color=(255, 255, 0, 255), thickness=2.0):
+        """True per UN SOLO frame quando `button` viene premuto MENTRE il
+        mouse e' sopra `shape`. Richiede che UpdateMouseState() sia stato
+        chiamato in questo frame."""
+        self._ensure_collision_state()
+        hit = (button in self._mouse_buttons_pressed) and \
+              _dispatch(self._mouse_point(), shape, self)
+        if show:
+            _draw_shape_outline(self, shape, color, thickness)
+        return hit
+
+    def MouseReleased(self, shape, button=PE_MOUSE_LEFT, show=False,
+                      color=(255, 128, 0, 255), thickness=2.0):
+        """True per UN SOLO frame quando `button` viene rilasciato sopra
+        `shape`."""
+        self._ensure_collision_state()
+        hit = (button in self._mouse_buttons_released) and \
+              _dispatch(self._mouse_point(), shape, self)
+        if show:
+            _draw_shape_outline(self, shape, color, thickness)
+        return hit
+
+    def MouseClicked(self, shape, button=PE_MOUSE_LEFT, show=False,
+                     color=(0, 255, 0, 255), thickness=2.0):
+        """Alias di MouseReleased — semanticamente 'click completato sulla
+        forma'."""
+        return self.MouseReleased(shape, button, show, color, thickness)
+
+    def MouseHeld(self, shape, button=PE_MOUSE_LEFT, show=False,
+                 color=(255, 0, 255, 255), thickness=2.0):
+        """True FINCHE' `button` resta premuto E il mouse resta sopra
+        `shape`."""
+        self._ensure_collision_state()
+        hit = (button in self._mouse_buttons_down) and \
+              _dispatch(self._mouse_point(), shape, self)
+        if show:
+            _draw_shape_outline(self, shape, color, thickness)
+        return hit
+
+    def MouseDragging(self, shape, button=PE_MOUSE_LEFT, show=False,
+                      color=(0, 128, 255, 255), thickness=2.0):
+        """True mentre l'utente sta trascinando (bottone premuto + mouse in
+        movimento) e il cursore e' sopra `shape`."""
+        self._ensure_collision_state()
+        moved = (self._mouse_x != self._mouse_prev_x) or \
+                (self._mouse_y != self._mouse_prev_y)
+        hit = moved and (button in self._mouse_buttons_down) and \
+              _dispatch(self._mouse_point(), shape, self)
+        if show:
+            _draw_shape_outline(self, shape, color, thickness)
+        return hit
+
+    def MouseWheelOn(self, shape, show=False, color=(200, 200, 0, 255),
+                     thickness=2.0):
+        """Ritorna (dx, dy) della rotellina se avvenuta sopra `shape` in
+        questo frame, altrimenti (0, 0). Uso: `dx, dy = draw.MouseWheelOn(btn)`."""
+        self._ensure_collision_state()
+        if self._mouse_wheel_event and _dispatch(self._mouse_point(), shape, self):
+            if show:
+                _draw_shape_outline(self, shape, color, thickness)
+            return self._mouse_wheel_x, self._mouse_wheel_y
+        return 0.0, 0.0
+
+#AGGANCIAMENTI
+DRAW.Point = Point
+DRAW.Rect = Rect
+DRAW.RotRect = RotRect
+DRAW.Circle = Circle
+DRAW.Ellipse = Ellipse
+DRAW.Line = Line
+DRAW.Triangle = Triangle
+DRAW.RoundedRect = RoundedRect
+DRAW.Polygon = Polygon
+DRAW.TextureCollider = TextureCollider

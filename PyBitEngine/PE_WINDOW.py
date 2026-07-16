@@ -69,29 +69,9 @@ class WINDOW(DRAW):
             raise ValueError(
                 "gc_thresholds must be a 3-tuple (gen0, gen1, gen2)"
             )
-
-        # BUG A fix: questa logica era invertita rispetto a SetGCAuto() e alla
-        # sua docstring. Con gc_auto=False (il default!) il codice originale
-        # chiamava gc.disable() e MAI gc.enable(): risultato, con i parametri
-        # di default la libreria disabilitava per sempre il garbage collector
-        # ciclico di Python senza eseguire alcuna raccolta manuale al suo
-        # posto (il blocco "GC manuale" nel Loop() è condizionato proprio su
-        # self._gc_auto). Qualsiasi ciclo di riferimenti — incluso quello che
-        # questa stessa classe crea con resize_watcher (self -> _resize_cb ->
-        # closure -> self) — non sarebbe mai stato raccolto: memory leak
-        # garantito già con i parametri predefiniti.
-        #
-        # Ora la logica è identica (e quindi sempre coerente) a quella di
-        # SetGCAuto():
-        #   gc_auto=True  -> controllo manuale: gc.disable() + ForceGC
-        #                     periodico nel Loop().
-        #   gc_auto=False -> GC automatico di Python: gc.enable() (+ soglie
-        #                     personalizzate se fornite).
         if self._gc_auto:
             gc.disable()
-            # NON chiamare gc.set_debug() — qualsiasi flag di debug (anche
-            # DEBUG_STATS) stampa su stderr ad ogni raccolta e distrugge
-            # le performance; vantaggi zero a runtime.
+
         else:
             gc.enable()
             if gc_thresholds is not None:
@@ -107,26 +87,6 @@ class WINDOW(DRAW):
         self.fps      = 0
         self._fps_timer  = 0.0
         self._fps_frames = 0
-
-        # ------------------------------------------------------------------ #
-        # BUG FIX: saturazione GPU inutile
-        # ------------------------------------------------------------------ #
-        # Loop() non aveva MAI alcun limite di frame rate. Con VSync=False
-        # (il default!) il while principale gira a velocità massima: anche
-        # una scena vuota arriva a centinaia/migliaia di FPS, saturando la
-        # GPU al 100% per nessun motivo (consumo energetico, ventole,
-        # calore, e su laptop scarica la batteria inutilmente).
-        #
-        # Con max_fps=None (default) applichiamo un comportamento sensato
-        # automaticamente:
-        #   - VSync=True  -> nessun cap: il driver sincronizza già lo swap
-        #                     al refresh del monitor, SDL_GL_SwapWindow
-        #                     blocca da solo.
-        #   - VSync=False -> cap automatico a 240 FPS, così chi non sa di
-        #                     dover limitare il frame rate non si ritrova
-        #                     comunque a bruciare GPU per niente.
-        # Un valore esplicito (anche 0 = nessun limite) sovrascrive sempre
-        # questa scelta automatica.
         if max_fps is None:
             self._max_fps = 0 if VSync else 240
         else:
@@ -289,16 +249,6 @@ class WINDOW(DRAW):
         gc.set_threshold(gen0, gen1, gen2)
 
     def ForceGC(self, generation: int = 0):
-        """
-        Forza una raccolta GC immediata.
-
-        generation:
-          0 → solo generazione giovane (veloce, ~0.1 ms — usare di routine)
-          1 → fino alla gen 1 (media)
-          2 → raccolta completa   (lenta, ~1–5 ms — usare raramente)
-
-        Restituisce (n_oggetti_raccolti, tempo_secondi).
-        """
         start     = time.perf_counter()
         collected = gc.collect(generation)
         elapsed   = time.perf_counter() - start
@@ -307,18 +257,6 @@ class WINDOW(DRAW):
         return collected, elapsed
 
     def _periodic_force_gc(self):
-        """
-        BUG B fix: raccolta periodica chiamata dal Loop() per tutte le
-        modalità ("frames"/"time"/"smart"). Usa un contatore DEDICATO
-        (`_gc_cycle_count`) che non viene mai azzerato dal trigger stesso,
-        a differenza del vecchio codice che resettava `_gc_counter` (usato
-        anche per decidere QUANDO raccogliere) e quindi non poteva mai
-        raggiungere il multiplo necessario per scatenare una gen=2: il
-        "ogni 10 cicli, raccolta completa" non scattava MAI in pratica.
-        Ogni 10 raccolte di routine (gen 0) ne viene quindi eseguita una
-        completa (gen 2) per eliminare i riferimenti circolari accumulati,
-        in modo identico per tutte le modalità.
-        """
         self._gc_cycle_count += 1
         gen = 2 if (self._gc_cycle_count % 10 == 0) else 0
         return self.ForceGC(gen)
@@ -398,14 +336,21 @@ class WINDOW(DRAW):
         return self._max_fps
 
     def SetFullscreen(self, fullscreen: bool = None, mode: str = "borderless"):
+        if fullscreen is None:
+            flags = sdl2.SDL_GetWindowFlags(self.window)
+            is_fullscreen = bool(flags & (sdl2.SDL_WINDOW_FULLSCREEN | sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP))
+            fullscreen = not is_fullscreen
+
         if mode == "borderless":
             sdl2.SDL_SetWindowFullscreen(
                 self.window,
-                sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP if fullscreen else 0)
+                sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP if fullscreen else 0
+            )
         elif mode == "fullscreen":
             sdl2.SDL_SetWindowFullscreen(
                 self.window,
-                sdl2.SDL_WINDOW_FULLSCREEN if fullscreen else 0)
+                sdl2.SDL_WINDOW_FULLSCREEN if fullscreen else 0
+            )
 
     # ------------------------------------------------------------------ #
     # Loop principale
@@ -416,14 +361,6 @@ class WINDOW(DRAW):
         last_time  = time.perf_counter()
         events_list = []
 
-        # BUG C fix: il cleanup (rilascio buffer GPU, rimozione event
-        # watcher, distruzione contesto/finestra SDL) era posto DOPO il
-        # while, senza alcun try/finally. Se update()/draw() (forniti
-        # dall'utente) sollevavano un'eccezione, l'intero blocco di
-        # pulizia veniva saltato: handle SDL/OpenGL e cache Python
-        # restavano vivi indefinitamente (leak di risorse non gestite
-        # dal garbage collector di Python, perché SDL/moderngl non sono
-        # tracciati da esso).
         try:
             while self.running:
                 now = time.perf_counter()
@@ -449,21 +386,6 @@ class WINDOW(DRAW):
                         self.running = False
 
                     elif t == sdl2.SDL_WINDOWEVENT:
-                        # BUG FIX 2: il resize e' gestito ESCLUSIVAMENTE dal
-                        # watcher SDL_AddEventWatch (SIZE_CHANGED), che scatta
-                        # anche durante il resize "live" su Windows. SDL emette
-                        # in sequenza sia SIZE_CHANGED sia RESIZED per lo
-                        # stesso resize: gestire anche qui il branch causava
-                        # _on_window_resize (e _build_gpu_resources delle
-                        # camere) invocato due volte per resize, con rischio
-                        # di doppio release() degli stessi oggetti GPU.
-                        # Se in futuro si volesse rimuovere il watcher,
-                        # reintrodurre qui il branch:
-                        #   if event.window.event in (
-                        #       sdl2.SDL_WINDOWEVENT_RESIZED,
-                        #       sdl2.SDL_WINDOWEVENT_SIZE_CHANGED,
-                        #   ): self._on_window_resize(
-                        #       event.window.data1, event.window.data2)
                         pass
 
                     elif t == sdl2.SDL_KEYDOWN:
@@ -497,9 +419,6 @@ class WINDOW(DRAW):
                                         x=event.button.x, y=event.button.y))
 
                     elif t == sdl2.SDL_MOUSEWHEEL:
-                        # PERF FIX 16: riutilizza i buffer ctypes preallocati
-                        # in __init__ invece di crearli ogni evento (scroll
-                        # intenso => spazzatura Python significativa).
                         mx = self._mouse_x_buf
                         my = self._mouse_y_buf
                         sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
@@ -508,35 +427,18 @@ class WINDOW(DRAW):
                                         wheel_x=event.wheel.x,
                                         wheel_y=event.wheel.y))
 
+                mx = self._mouse_x_buf; my = self._mouse_y_buf
+                sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
+
                 # --- Frame ---
+                self.UpdateMouseState(mx.value, my.value, events_list)
                 self.update(dt, events_list)
                 self.ctx.clear(*self.color)
                 self.draw()
-                # PERF/BUG FIX: senza questa chiamata i batch di primitive
-                # (rect_count / tex_rect_count) che NON arrivano a riempire
-                # max_rects non vengono mai scritti sulla GPU in questo frame:
-                # restano nel buffer CPU finche' un futuro overflow non
-                # forza un Flush() interno. In pratica, con scene "normali"
-                # (poche centinaia/migliaia di forme contro un default di
-                # 131072), quasi nulla arrivava mai a schermo tramite le
-                # DrawRect/DrawLine/DrawText/... non-Batch. PE_CAMERA.py
-                # (vedi CameraGPU.end(), riga ~249) documenta esplicitamente
-                # che il loop principale deve chiamare FlushAll() PRIMA di
-                # SDL_GL_SwapWindow: qui mancava del tutto.
+
                 self.FlushAll()
                 sdl2.SDL_GL_SwapWindow(self.window)
 
-                # --- Frame limiter (BUG FIX: saturazione GPU inutile) ---
-                # Senza questo blocco, con VSync=False il while sopra girava
-                # a velocità massima: zero pause, zero freni, GPU al 100%
-                # anche per disegnare un singolo rettangolo statico.
-                # Dormiamo il tempo restante rispetto al budget di frame
-                # (1/max_fps secondi), misurato da 'now' (inizio di questo
-                # stesso frame). time.sleep() su molti sistemi (specialmente
-                # Windows) ha una granularità di ~15ms, quindi per restare
-                # precisi lasciamo un margine di sicurezza e affiniamo gli
-                # ultimi ~1ms con un breve spin-wait (costa pochissima CPU,
-                # zero GPU, ed evita di "sforare" il target dormendo troppo).
                 if self._frame_duration > 0.0:
                     target_end = now + self._frame_duration
                     remaining  = target_end - time.perf_counter()
