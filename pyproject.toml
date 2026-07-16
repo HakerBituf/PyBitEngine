@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pybitengine"
+version = "0.1.2"
+description = "A GPU-accelerated 2D game engine for Python with camera, drawing and packaging helpers."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "BitufStudio", email = "bitufmusic@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = [
+    "pybitengine", "game-engine", "2d-graphics", "gpu-rendering",
+    "modern-gl", "sdl2", "numpy", "numba", "texture-atlas", "batch-rendering",
+]
+dependencies = [
+    "PySDL2>=0.9.7",
+    "moderngl>=5.7.0",
+    "numpy>=1.21.0",
+    "numba>=0.56.0",
+    "Pillow>=9.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/HakerBituf/PyBitEngine"
+Documentation = "https://hakerbituf.github.io/PyBitEngine/"
+Repository = "https://github.com/HakerBituf/PyBitEngine.git"
+Issues = "https://github.com/HakerBituf/PyBitEngine/issues"
+
+[tool.setuptools]
+include-package-data = true
+package-dir = { "" = "." }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["PyBitEngine", "PyBitEngine.*"]
+
+[tool.setuptools.package-data]
+PyBitEngine = ["licenses/*", "licenses/**/*"]
