@@ -10,17 +10,35 @@ PyBitEngine helps developers draw thousands of 2D objects efficiently while keep
 
 ---
 
-## 📦 Version: 0.1.1
+## 📦 Version: 0.1.2
 
-This release expands the primitive set with rounded shapes and their fully-instanced batch counterparts, keeping the same SDF + AA pipeline used by every other primitive in the engine.
+This is a stability and correctness release. It focuses on fixing rendering-order
+bugs, camera-shake artifacts, geometric collision edge cases and a few packaging
+rough edges reported against 0.1.1. No public API was removed or renamed:
+upgrading from 0.1.1 requires no code changes.
 
-### What is new in 0.1.1
-- New immediate primitives: `DrawRoundedRect`, `DrawRoundedRectOutline`, `DrawRoundedTriangle`, `DrawRoundedTriangleOutline`.
-- New GPU-instanced batch primitives: `DrawRoundedRectsBatch`, `DrawRoundedRectsOutlineBatch`, `DrawRoundedTrianglesBatch`, `DrawRoundedTrianglesOutlineBatch`.
-- Rounded shapes share the same SDF fragment shader and `fwidth`-based anti-aliasing used by rectangles, triangles and ellipses, so outlines stay visually consistent across every primitive (identical to the straight-edge version when `radius = 0`).
-- Numba-parallel instance packing for both rounded rects and rounded triangles: one draw call per chunk, ~0 CPU overhead per shape.
-- `radius`, `rotation` and `thickness` accept either a scalar or a per-instance array of length `n` in every rounded batch call.
-- Documentation site updated to v0.1.1 with full coverage of the new shapes (signatures, parameters, examples).
+### What is new in 0.1.2
+
+- **Painter's algorithm fixed for textures + primitives.** `DrawTexture` now
+  participates in the same `_use_batch` batching used by every other primitive.
+  Mixing `DrawTexture`, `DrawRect`, `DrawRoundedRect`, etc. now produces draw
+  calls in the exact order of the `Draw*` calls — no more textures rendered
+  after rectangles regardless of call order.
+- **Screen-shake bias removed** on both `CameraGPU` and `CameraCPU`. The shake
+  offset is now a zero-mean oscillation (`sin/cos * factor`) instead of the
+  previous `2*sin - 1` formula that produced a net drift toward the
+  bottom-left.
+- **Polygon vs Ellipse collision** now also tests polygon edges against the
+  ellipse boundary. Cases where an ellipse crosses a polygon edge without
+  containing any vertex and without having its center inside are correctly
+  reported as colliding (previously false negatives).
+- **PE_PAKER** — `pack()` injects the absolute directory of the source script
+  into `sys.path` of the generated `setup.py`, instead of `Path.cwd()` at
+  generation time. Packaging now works reliably when `pack()` is invoked from
+  a directory other than the project root.
+- Minor documentation and comment cleanups across `PE_DRAW`, `PE_CAMERA` and
+  `PE_PAKER` explaining the invariants behind the fixes above.
+
 ---
 
 ## ✨ Highlights
@@ -50,7 +68,17 @@ window = WINDOW(title="PyBitEngine", geometry=("center", "center", 800, 600))
 window.Loop()
 ```
 
-## 🟦 Rounded shapes (new in 0.1.1)
+## 🎨 Correct layering (fixed in 0.1.2)
+
+```python
+# Draw calls now render strictly in the order they are issued,
+# even when mixing textures and primitives.
+draw.DrawTexture("background", 0, 0, 800, 600)          # layer 0
+draw.DrawRect(100, 100, 50, 50, color=(255, 0, 0))      # layer 1 (above bg)
+draw.DrawTexture("player", 200, 200, 32, 32)            # layer 2 (above rect)
+```
+
+## 🟦 Rounded shapes (from 0.1.1)
 
 ```python
 # Immediate
@@ -78,4 +106,8 @@ pack("main.py", name="MyGame", output_dir="dist")
 
 ## 📝 Notes
 
-PyBitEngine is still evolving, but the core rendering and packaging APIs are increasingly stable and suitable for real projects. The 0.1.1 release rounds out (pun intended) the primitive set so UI panels, buttons and stylized shapes can be drawn with the same batched performance as everything else.
+PyBitEngine is still evolving, but the core rendering and packaging APIs are
+increasingly stable and suitable for real projects. The 0.1.2 release is a
+maintenance drop on top of 0.1.1: same features, more correct behavior when
+mixing textures with primitives, using camera shake, or packaging from a
+non-standard working directory.
