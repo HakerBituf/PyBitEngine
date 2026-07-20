@@ -10,46 +10,25 @@ PyBitEngine helps developers draw thousands of 2D objects efficiently while keep
 
 ---
 
-## 📦 Version: 0.1.2
+## 📦 Version: 0.1.3
 
-This is a stability and correctness release. It focuses on fixing rendering-order
-bugs, camera-shake artifacts, geometric collision edge cases and a few packaging
-rough edges reported against 0.1.1. No public API was removed or renamed:
-upgrading from 0.1.1 requires no code changes.
+This release brings major new features: a unified collision system, mouse helpers, rounded shapes, pixel‑perfect texture collisions, a texture atlas, depth sorting, performance optimizations, and a complete timer module.
 
-### What is new in 0.1.2
+### What is new in 0.1.3
 
-- **Painter's algorithm fixed for textures + primitives.** `DrawTexture` now
-  participates in the same `_use_batch` batching used by every other primitive.
-  Mixing `DrawTexture`, `DrawRect`, `DrawRoundedRect`, etc. now produces draw
-  calls in the exact order of the `Draw*` calls — no more textures rendered
-  after rectangles regardless of call order.
-- **Screen-shake bias removed** on both `CameraGPU` and `CameraCPU`. The shake
-  offset is now a zero-mean oscillation (`sin/cos * factor`) instead of the
-  previous `2*sin - 1` formula that produced a net drift toward the
-  bottom-left.
-- **Polygon vs Ellipse collision** now also tests polygon edges against the
-  ellipse boundary. Cases where an ellipse crosses a polygon edge without
-  containing any vertex and without having its center inside are correctly
-  reported as colliding (previously false negatives).
-- **PE_PAKER** — `pack()` injects the absolute directory of the source script
-  into `sys.path` of the generated `setup.py`, instead of `Path.cwd()` at
-  generation time. Packaging now works reliably when `pack()` is invoked from
-  a directory other than the project root.
-- Minor documentation and comment cleanups across `PE_DRAW`, `PE_CAMERA` and
-  `PE_PAKER` explaining the invariants behind the fixes above.
-
----
-
-## ✨ Highlights
-
-- Instanced GPU rendering for rectangles, rounded rectangles, lines, triangles, rounded triangles, ellipses and sprites.
-- Outline variants for every filled primitive, with a shared AA formula for consistent borders.
-- Texture atlas packing with MaxRects allocation.
-- 2D camera support with CPU and GPU-backed variants.
-- Font rendering for TTF/OTF files with caching.
-- SDL2 input handling for keyboard, mouse, drag and wheel events.
-- Geometry helpers for points, rectangles, triangles, ellipses, circles and OBB collision checks.
+- **Unified collision system** — `CheckCollision` works with any combination of immutable shapes (`Rect`, `Circle`, `Ellipse`, `Triangle`, `Line`, `RotRect`, `RoundedRect`, `Polygon`, `TextureCollider`). Zero object creation overhead.
+- **Mouse helpers** — `MouseOver`, `MousePressed`, `MouseClicked`, `MouseHeld`, `MouseDragging`, `MouseWheelOn` work directly with any shape and optionally with a camera for world-space picking.
+- **Full rounded shapes** — `DrawRoundedRect`, `DrawRoundedTriangle` and their outline variants, with GPU-instanced batch versions (`DrawRoundedRectsBatch`, `DrawRoundedTrianglesBatch`).
+- **Pixel‑perfect texture collisions** — `CollidePointTexture` and `CollidePointTextureBatch` use the alpha channel stored on the CPU (no GPU readback, no disk I/O at runtime).
+- **Texture atlas** — `LoadTextureAtlas` inserts an image into the shared atlas; `DrawSpritesBatch` can then render thousands of sprites from the same atlas in one draw call.
+- **Easy‑to‑use batch wrappers** — `DrawRects`, `DrawLines`, `DrawCircles`, `DrawEllipses`, `DrawSprites`, `DrawTexts` accept lists of tuples with the same parameters as their immediate counterparts. No NumPy knowledge required.
+- **Early‑Z / depth sorting** — `enable_early_z()` and the `begin_opaque_pass()` / `begin_transparent_pass()` helpers let you sort opaque objects front‑to‑back and transparent objects back‑to‑front, dramatically reducing overdraw.
+- **Performance boost** — color packing in uint32, pre‑computed cos/sin on the CPU, optimized Numba kernels, and fewer allocations make batch rendering faster than ever.
+- **Complete key constants** — all keyboard and mouse constants are now exported, including previously missing ones like `PE_K_CAPSLOCK`, `PE_K_NUMLOCK`, `PE_K_PRINTSCREEN`, `PE_K_LSUPER`, etc.
+- **PE_TIME module** — non‑blocking timers: `Scheduler`, `After`, `Every`, `Countdown`, `Cooldown`, `Stopwatch`, plus `AsyncTimer`/`AsyncAfter` for background work with `RunOnMainThread` and `PumpMainThread`.
+- **PE_PAKER module** — `pack()` creates standalone executables using `cx_Freeze`, with automatic inclusion of assets and dependencies.
+- **CameraGPU and CameraCPU** — both now support smooth follow, screen‑shake, world bounds, coordinate conversion (`screen_to_world` / `world_to_screen`), and batch culling (`is_visible_batch`). The shake offset is now zero‑mean (no net drift).
+- **Painter’s algorithm fixed** — `DrawTexture` now participates in the same batching system as primitives, so draw calls appear in the exact order they are issued.
 
 ---
 
@@ -57,57 +36,3 @@ upgrading from 0.1.1 requires no code changes.
 
 ```bash
 pip install pybitengine
-```
-
-## 🧪 Quick usage
-
-```python
-from PyBitEngine import WINDOW
-
-window = WINDOW(title="PyBitEngine", geometry=("center", "center", 800, 600))
-window.Loop()
-```
-
-## 🎨 Correct layering (fixed in 0.1.2)
-
-```python
-# Draw calls now render strictly in the order they are issued,
-# even when mixing textures and primitives.
-draw.DrawTexture("background", 0, 0, 800, 600)          # layer 0
-draw.DrawRect(100, 100, 50, 50, color=(255, 0, 0))      # layer 1 (above bg)
-draw.DrawTexture("player", 200, 200, 32, 32)            # layer 2 (above rect)
-```
-
-## 🟦 Rounded shapes (from 0.1.1)
-
-```python
-# Immediate
-draw.DrawRoundedRect(100, 100, 200, 80, radius=16, color=(255, 100, 50))
-draw.DrawRoundedRectOutline(100, 100, 200, 80, radius=16, thickness=3,
-                            color=(255, 255, 255))
-draw.DrawRoundedTriangle(100, 50, 200, 200, 50, 200, radius=12,
-                         color=(0, 255, 150))
-
-# Batch (GPU-instanced, one draw call per chunk)
-import numpy as np
-pos    = np.array([[10, 10], [120, 10], [230, 10]], dtype="f4")
-size   = np.array([[80, 40], [80, 40],  [80, 40]],  dtype="f4")
-radius = np.array([6, 12, 20], dtype="f4")           # per-instance radius
-draw.DrawRoundedRectsBatch(pos, size, radius, colors=(255, 0, 128))
-```
-
-## 📦 Packaging a game
-
-```python
-from PyBitEngine import pack
-
-pack("main.py", name="MyGame", output_dir="dist")
-```
-
-## 📝 Notes
-
-PyBitEngine is still evolving, but the core rendering and packaging APIs are
-increasingly stable and suitable for real projects. The 0.1.2 release is a
-maintenance drop on top of 0.1.1: same features, more correct behavior when
-mixing textures with primitives, using camera shake, or packaging from a
-non-standard working directory.
