@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyBitEngine v0.1.3 — Documentazione completa</title>
+<style>
+:root{
+  --bg:#0b1020; --bg2:#111834; --panel:#141c3a; --panel2:#1a2347;
+  --text:#e6ecff; --muted:#94a3c7; --border:#243056;
+  --accent:#7c9cff; --accent2:#5eead4; --warn:#fbbf24; --danger:#f87171;
+  --code-bg:#0a0f24; --code-border:#1e2a55;
+  --sig-bg:#182146; --sig-border:#2b3a72;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.65;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code,pre{font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13.5px}
+.layout{display:flex;min-height:100vh}
+/* Sidebar */
+aside{width:290px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);height:100vh;position:sticky;top:0;overflow-y:auto;padding:1.2rem 0}
+aside .brand{padding:0 1.2rem 1rem;border-bottom:1px solid var(--border);margin-bottom:.8rem}
+aside .brand h1{font-size:1.15rem;letter-spacing:-.3px}
+aside .brand h1 span{color:var(--accent2)}
+aside .brand .ver{display:inline-block;margin-top:.35rem;font-size:.7rem;background:var(--panel2);color:var(--accent);padding:.15rem .55rem;border-radius:10px;font-weight:600}
+aside nav h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);padding:.9rem 1.2rem .35rem}
+aside nav a{display:block;padding:.32rem 1.2rem;color:var(--text);font-size:.88rem;border-left:2px solid transparent}
+aside nav a:hover{background:var(--panel);border-left-color:var(--accent);text-decoration:none}
+aside nav a.sub{padding-left:2rem;color:var(--muted);font-size:.82rem}
+/* Main */
+main{flex:1;max-width:1100px;padding:2.5rem 3rem 6rem;min-width:0}
+h1.page{font-size:2.3rem;letter-spacing:-.8px;margin-bottom:.6rem}
+h2{margin-top:3rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.7rem;letter-spacing:-.4px}
+h3{margin-top:2rem;font-size:1.25rem;color:var(--accent2)}
+h4{margin-top:1.4rem;font-size:1rem;color:var(--accent)}
+p{margin:.7rem 0;color:#d3dbf5}
+ul,ol{margin:.7rem 0 .7rem 1.4rem;color:#d3dbf5}
+li{margin:.25rem 0}
+strong{color:#fff}
+em{color:var(--accent2);font-style:normal;font-weight:500}
+/* Code blocks */
+pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.1rem;overflow-x:auto;margin:.9rem 0;line-height:1.55}
+p code,li code,td code{background:var(--panel);padding:.1rem .38rem;border-radius:4px;color:var(--accent2);font-size:.86em}
+.sig{background:var(--sig-bg);border-left:3px solid var(--accent);border-radius:6px;padding:.7rem 1rem;margin:1rem 0;font-family:'JetBrains Mono',monospace;font-size:.88rem;color:#dbe3ff;overflow-x:auto;white-space:pre}
+/* Callouts */
+.note,.warn,.tip{border-left:3px solid;padding:.7rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0;background:var(--panel)}
+.note{border-color:var(--accent)}
+.warn{border-color:var(--warn)}
+.tip{border-color:var(--accent2)}
+.note b,.warn b,.tip b{color:#fff}
+/* Tables */
+table{width:100%;border-collapse:collapse;margin:1rem 0;background:var(--panel);border-radius:6px;overflow:hidden;font-size:.9rem}
+th,td{padding:.55rem .8rem;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--panel2);color:var(--accent2);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+/* Method card */
+.method{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.method h4{margin-top:0}
+.badge{display:inline-block;font-size:.7rem;padding:.1rem .5rem;border-radius:10px;background:var(--panel2);color:var(--accent);margin-left:.5rem;vertical-align:middle}
+.badge.new{background:#134e4a;color:var(--accent2)}
+.badge.perf{background:#3d2814;color:var(--warn)}
+/* Syntax highlight (very light) */
+.k{color:#c084fc}.s{color:#86efac}.c{color:#64748b;font-style:italic}.n{color:#fbbf24}.b{color:#7c9cff}.f{color:#5eead4}
+hr{border:none;border-top:1px solid var(--border);margin:2rem 0}
+/* Responsive */
+@media (max-width: 900px){
+  .layout{flex-direction:column}
+  aside{width:100%;height:auto;position:static;max-height:none}
+  main{padding:1.5rem 1.2rem 4rem}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand">
+    <h1>PyBit<span>Engine</span></h1>
+    <span class="ver">v0.1.3</span>
+  </div>
+  <nav>
+    <h3>Inizio</h3>
+    <a href="#intro">Introduzione</a>
+    <a href="#install">Installazione</a>
+    <a href="#quickstart">Quick Start</a>
+    <a href="#import">Import unico</a>
+
+    <h3>WINDOW</h3>
+    <a href="#window">Classe WINDOW</a>
+    <a href="#window-init" class="sub">Costruttore</a>
+    <a href="#window-hooks" class="sub">update / draw / Loop</a>
+    <a href="#window-props" class="sub">Cursore, titolo, icona</a>
+    <a href="#window-fps" class="sub">FPS &amp; fullscreen</a>
+    <a href="#window-gc" class="sub">Garbage Collector</a>
+
+    <h3>DRAW — Primitive</h3>
+    <a href="#draw-rect">Rettangoli</a>
+    <a href="#draw-round">Rettangoli arrotondati</a>
+    <a href="#draw-circle">Cerchi &amp; ellissi</a>
+    <a href="#draw-line">Linee</a>
+    <a href="#draw-tri">Triangoli</a>
+    <a href="#draw-rtri">Triangoli arrotondati</a>
+    <a href="#draw-bezier">Curve di Bézier</a>
+    <a href="#draw-batch">API batch di alto livello</a>
+
+    <h3>DRAW — Texture &amp; Sprite</h3>
+    <a href="#tex-load">LoadTexture / Atlas</a>
+    <a href="#tex-draw">DrawTexture</a>
+    <a href="#tex-batch">DrawSpritesBatch</a>
+
+    <h3>DRAW — Testo</h3>
+    <a href="#text">FontManager &amp; DrawText</a>
+
+    <h3>Collisioni</h3>
+    <a href="#collide">CollidePoint / Collide*</a>
+    <a href="#mouse-api">Mouse: Over / Clicked / Held</a>
+    <a href="#collision-check">CheckCollision</a>
+
+    <h3>Input — PE_KEYS</h3>
+    <a href="#events">PE_Event</a>
+    <a href="#keycodes">Costanti tasti</a>
+    <a href="#mouse-const">Costanti mouse</a>
+
+    <h3>CAMERA</h3>
+    <a href="#cameragpu">CameraGPU</a>
+    <a href="#cameracpu">CameraCPU</a>
+
+    <h3>PE_TIME</h3>
+    <a href="#time-frame">Scheduler a frame</a>
+    <a href="#time-count">Countdown / Cooldown / Stopwatch</a>
+    <a href="#time-async">AsyncTimer &amp; MainThread</a>
+
+    <h3>PE_PAKER</h3>
+    <a href="#pack">pack()</a>
+
+    <h3>Ricette complete</h3>
+    <a href="#recipe-pong">Mini Pong</a>
+    <a href="#recipe-particles">10.000 particelle</a>
+    <a href="#recipe-platform">Camera che segue il player</a>
+  </nav>
+</aside>
+
+<main>
+
+<h1 class="page">PyBitEngine <span style="color:var(--muted);font-size:1.2rem">v0.1.3</span></h1>
+<p style="font-size:1.05rem;color:var(--muted)">Motore 2D Python veloce, batch-oriented, basato su <b>ModernGL + SDL2</b>. Un unico oggetto <code>WINDOW</code> che eredita tutto il rendering, le collisioni e la gestione input. Batch NumPy/Numba per migliaia di primitive per frame.</p>
+
+<!-- ============ INTRO ============ -->
+<h2 id="intro">Introduzione</h2>
+<p>PyBitEngine è composto da <b>7 moduli</b> pubblici che vengono esposti tutti da un unico import:</p>
+<table>
+<tr><th>Modulo</th><th>Contenuto</th></tr>
+<tr><td><code>PE_WINDOW</code></td><td>Classe <code>WINDOW</code> — finestra, contesto GL, event loop, GC.</td></tr>
+<tr><td><code>PE_DRAW</code></td><td>Classe <code>DRAW</code> (ereditata da <code>WINDOW</code>) + <code>FontManager</code>, shape data-classes.</td></tr>
+<tr><td><code>PE_CAMERA</code></td><td><code>CameraGPU</code>, <code>CameraCPU</code>.</td></tr>
+<tr><td><code>PE_KEYS</code></td><td><code>PE_Event</code> e tutte le costanti tastiera/mouse.</td></tr>
+<tr><td><code>PE_TIME</code></td><td>Scheduler a frame, timer, cooldown, async timer.</td></tr>
+<tr><td><code>PE_PAKER</code></td><td>Funzione <code>pack()</code> per creare eseguibili con cx_Freeze.</td></tr>
+</table>
+
+<h2 id="install">Installazione</h2>
+<pre><span class="c"># Dipendenze runtime</span>
+pip install pysdl2 pysdl2-dll moderngl numpy numba pillow
+
+<span class="c"># PyBitEngine</span>
+pip install PyBitEngine</pre>
+
+<h2 id="import">Import unico</h2>
+<p>Tutto ciò che è pubblico si importa in un colpo solo:</p>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> *</pre>
+<p>Questo porta nel namespace: <code>WINDOW</code>, <code>DRAW</code>, <code>CameraGPU</code>, <code>CameraCPU</code>, <code>FontManager</code>, <code>pack</code>, il modulo <code>PE_TIME</code>, la classe <code>PE_Event</code> e <b>tutte</b> le costanti <code>PE_K_*</code> / <code>PE_MOUSE_*</code>.</p>
+
+<h2 id="quickstart">Quick Start — 20 righe</h2>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> *
+
+<span class="k">class</span> <span class="f">Game</span>(WINDOW):
+    <span class="k">def</span> <span class="f">__init__</span>(self):
+        <span class="b">super</span>().__init__(title=<span class="s">"Hello PyBit"</span>,
+                         geometry=(<span class="s">"center"</span>, <span class="s">"center"</span>, <span class="n">800</span>, <span class="n">600</span>),
+                         VSync=<span class="k">True</span>)
+        self.SetBackground((<span class="n">20</span>, <span class="n">24</span>, <span class="n">40</span>))
+        self.x = <span class="n">100.0</span>
+
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        self.x += <span class="n">120</span> * dt        <span class="c"># 120 px/s</span>
+        <span class="k">for</span> ev <span class="k">in</span> events:
+            <span class="k">if</span> ev.type == PE_KEYDOWN <span class="k">and</span> ev.key == PE_K_ESCAPE:
+                self.running = <span class="k">False</span>
+
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        self.DrawRect(self.x, <span class="n">200</span>, <span class="n">120</span>, <span class="n">80</span>, color=(<span class="n">94</span>, <span class="n">234</span>, <span class="n">212</span>))
+        self.DrawText(f<span class="s">"FPS: {self.GetFPS()}"</span>, <span class="n">10</span>, <span class="n">10</span>, size=<span class="n">20</span>)
+
+Game().Loop()</pre>
+<div class="tip"><b>Pattern fondamentale:</b> ereditare da <code>WINDOW</code>, sovrascrivere <code>update(dt, events)</code> e <code>draw()</code>, poi chiamare <code>.Loop()</code>. Il resto del framework fluisce da lì.</div>
+
+<!-- ============ WINDOW ============ -->
+<h2 id="window">Classe WINDOW</h2>
+<p><code>WINDOW</code> eredita <code>DRAW</code>: <b>ogni</b> metodo di disegno/collisione è disponibile direttamente su <code>self</code>.</p>
+
+<h3 id="window-init">Costruttore</h3>
+<div class="sig">WINDOW(title="PyEngine",
+       geometry=("center","center", 800, 600),
+       icon="", fullscreen=False, borderless=False,
+       VSync=False, MSAA=False, MSS=4,
+       max_fps=None,
+       gc_auto=False, gc_mode="frames", gc_interval=600,
+       gc_thresholds=None, gc_obj_number=700,
+       max_draw_elements=131072)</div>
+<table>
+<tr><th>Parametro</th><th>Descrizione</th></tr>
+<tr><td><code>title</code></td><td>Titolo della finestra.</td></tr>
+<tr><td><code>geometry</code></td><td><code>(x, y, w, h)</code>. <code>x</code>/<code>y</code> possono essere <code>"center"</code>.</td></tr>
+<tr><td><code>icon</code></td><td>Path a un file <code>.png/.jpg/.bmp/.ico</code>.</td></tr>
+<tr><td><code>fullscreen</code></td><td>Fullscreen borderless al boot.</td></tr>
+<tr><td><code>VSync</code></td><td>Sincronizza con il refresh del monitor.</td></tr>
+<tr><td><code>MSAA</code>, <code>MSS</code></td><td>Anti-aliasing multisample e numero di sample (2/4/8/16).</td></tr>
+<tr><td><code>max_fps</code></td><td>Cap manuale sugli FPS. <code>None</code> = illimitato.</td></tr>
+<tr><td><code>gc_auto</code></td><td><code>True</code> = GC manuale periodico (più stabile).</td></tr>
+<tr><td><code>max_draw_elements</code></td><td>Dimensione massima dei buffer batch (default 131 072).</td></tr>
+</table>
+
+<h3 id="window-hooks">Hook del game loop: update / draw / Loop</h3>
+<p>Sovrascrivi <code>update(dt, events)</code> e <code>draw()</code> nella tua sottoclasse. <code>Loop()</code> avvia il main loop bloccante.</p>
+<pre><span class="k">class</span> <span class="f">Game</span>(WINDOW):
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        <span class="c"># dt: secondi trascorsi dall'ultimo frame</span>
+        <span class="c"># events: lista di PE_Event ricevuti in questo frame</span>
+        ...
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        <span class="c"># Chiama i metodi Draw* qui</span>
+        ...
+
+Game().Loop()</pre>
+
+<h3 id="window-props">Cursore, titolo, sfondo, icona</h3>
+<div class="method">
+<h4>SetCursor(cursor_type)</h4>
+<div class="sig">SetCursor(cursor_type: str | int)</div>
+<p>Stringhe accettate: <code>"arrow"</code>, <code>"ibeam"</code>, <code>"wait"</code>, <code>"crosshair"</code>, <code>"hand"</code>, <code>"no"</code>, <code>"sizeall"</code>, <code>"sizenwse"</code>, <code>"sizenesw"</code>, <code>"sizewe"</code>, <code>"sizens"</code>, <code>"waitarrow"</code>.</p>
+<pre>self.SetCursor(<span class="s">"hand"</span>)</pre>
+</div>
+<div class="method">
+<h4>SetCustomCursor(image_path, width, height, hot_x, hot_y)</h4>
+<pre>self.SetCustomCursor(<span class="s">"cursor.png"</span>, <span class="n">32</span>, <span class="n">32</span>, hot_x=<span class="n">0</span>, hot_y=<span class="n">0</span>)</pre>
+</div>
+<div class="method">
+<h4>SetCursorVisible(visible), SetFluidResize(enabled)</h4>
+<pre>self.SetCursorVisible(<span class="k">False</span>)   <span class="c"># nasconde il cursore</span>
+self.SetFluidResize(<span class="k">True</span>)      <span class="c"># resize senza sospensione del loop</span></pre>
+</div>
+<div class="method">
+<h4>SetBackground(color), SetTitle(title), SetIcon(icon)</h4>
+<pre>self.SetBackground((<span class="n">15</span>, <span class="n">20</span>, <span class="n">40</span>))
+self.SetTitle(<span class="s">"Mio Gioco"</span>)
+self.SetIcon(<span class="s">"assets/icon.png"</span>)</pre>
+</div>
+
+<h3 id="window-fps">FPS &amp; fullscreen</h3>
+<div class="method">
+<h4>GetFPS() → int &nbsp;·&nbsp; SetMaxFPS(n) &nbsp;·&nbsp; GetMaxFPS()</h4>
+<pre>self.SetMaxFPS(<span class="n">144</span>)
+<span class="k">print</span>(self.GetFPS(), self.GetMaxFPS())</pre>
+</div>
+<div class="method">
+<h4>SetFullscreen(fullscreen=None, mode="borderless")</h4>
+<p><code>mode</code>: <code>"borderless"</code> (default) o <code>"exclusive"</code>. Passando <code>None</code> toggle-a lo stato.</p>
+<pre>self.SetFullscreen(<span class="k">True</span>, mode=<span class="s">"exclusive"</span>)</pre>
+</div>
+<div class="method">
+<h4>GetScreenResolution() → (w, h)</h4>
+<pre>w, h = self.GetScreenResolution()</pre>
+</div>
+<div class="method">
+<h4>Destroy()</h4>
+<p>Libera SDL/GL manualmente (raramente necessario: <code>Loop()</code> lo fa in <code>finally</code>).</p>
+</div>
+
+<h3 id="window-gc">Garbage Collector controllato</h3>
+<p>Su scene pesanti, delegare al GC di Python può causare hitch. PyBitEngine permette di disabilitarlo e forzare raccolte periodiche.</p>
+<div class="method">
+<h4>SetGCAuto(enabled, mode, interval, thresholds)</h4>
+<div class="sig">SetGCAuto(enabled: bool,
+          mode: "frames" | "time" | "smart" = "frames",
+          interval: float = 600,
+          thresholds: tuple = None)</div>
+<ul>
+<li><code>mode="frames"</code>: raccoglie ogni <code>interval</code> frame.</li>
+<li><code>mode="time"</code>: raccoglie ogni <code>interval</code> secondi.</li>
+<li><code>mode="smart"</code>: raccoglie quando <code>gen0</code> supera la soglia.</li>
+</ul>
+<pre>self.SetGCAuto(<span class="k">True</span>, mode=<span class="s">"time"</span>, interval=<span class="n">2.0</span>)  <span class="c"># ogni 2 secondi</span></pre>
+</div>
+<div class="method">
+<h4>ForceGC(gen=0), GetGCStats(), IsGCEnabled(), SetGCSmartThreshold(n)</h4>
+<pre>collected, sec = self.ForceGC(<span class="n">2</span>)   <span class="c"># full collection</span>
+<span class="k">print</span>(self.GetGCStats())  <span class="c"># {'count': 12, 'total_time': 0.043}</span></pre>
+</div>
+
+<!-- ============ DRAW PRIMITIVES ============ -->
+<h2 id="draw-rect">DRAW — Rettangoli</h2>
+<div class="method">
+<h4>DrawRect(x, y, w, h, color=(255,255,255), alpha=255, rotation=0.0)</h4>
+<pre>self.DrawRect(<span class="n">50</span>, <span class="n">50</span>, <span class="n">200</span>, <span class="n">100</span>, color=(<span class="n">124</span>, <span class="n">156</span>, <span class="n">255</span>), rotation=<span class="n">15</span>)</pre>
+</div>
+<div class="method">
+<h4>DrawRectOutline(x, y, w, h, thickness=1.0, color=..., alpha=255, rotation=0.0)</h4>
+<pre>self.DrawRectOutline(<span class="n">50</span>, <span class="n">50</span>, <span class="n">200</span>, <span class="n">100</span>, thickness=<span class="n">3</span>, color=(<span class="n">255</span>,<span class="n">200</span>,<span class="n">0</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawRectsBatch(positions, sizes, colors, alpha=255, rotation=0.0) <span class="badge perf">batch</span></h4>
+<div class="sig">positions : ndarray (N, 2)
+sizes     : ndarray (N, 2)
+colors    : ndarray (N, 3|4) oppure singola tuple
+rotation  : scalare o ndarray (N,)</div>
+<pre><span class="k">import</span> numpy <span class="k">as</span> np
+N = <span class="n">5000</span>
+pos = np.random.rand(N, <span class="n">2</span>) * [<span class="n">800</span>, <span class="n">600</span>]
+sz  = np.full((N, <span class="n">2</span>), <span class="n">4.0</span>)
+col = (np.random.rand(N, <span class="n">3</span>) * <span class="n">255</span>).astype(<span class="s">'u1'</span>)
+self.DrawRectsBatch(pos, sz, col)</pre>
+</div>
+<div class="method">
+<h4>DrawRectsOutlineBatch(positions, sizes, colors, thickness=1.0, alpha=255, rotation=0.0)</h4>
+<p>Come sopra, ma solo contorno.</p>
+</div>
+
+<h2 id="draw-round">Rettangoli arrotondati</h2>
+<div class="method">
+<h4>DrawRoundedRect(x, y, w, h, radius, color=..., alpha=255, rotation=0.0, softness=1.0)</h4>
+<pre>self.DrawRoundedRect(<span class="n">100</span>, <span class="n">100</span>, <span class="n">240</span>, <span class="n">120</span>, radius=<span class="n">16</span>,
+                     color=(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>), softness=<span class="n">1.2</span>)</pre>
+</div>
+<div class="method">
+<h4>DrawRoundedRectOutline(x, y, w, h, radius, thickness=1.0, ...)</h4>
+<pre>self.DrawRoundedRectOutline(<span class="n">100</span>, <span class="n">100</span>, <span class="n">240</span>, <span class="n">120</span>, radius=<span class="n">16</span>,
+                            thickness=<span class="n">3</span>, color=(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawRoundedRectsBatch(positions, sizes, radius, colors, ...)</h4>
+</div>
+
+<h2 id="draw-circle">Cerchi &amp; ellissi</h2>
+<div class="method">
+<h4>DrawCircle(cx, cy, r, color=..., alpha=255)</h4>
+<pre>self.DrawCircle(<span class="n">400</span>, <span class="n">300</span>, <span class="n">60</span>, color=(<span class="n">255</span>,<span class="n">120</span>,<span class="n">80</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawEllipse(cx, cy, rx, ry, color=..., alpha=255, rotation=0.0)</h4>
+<pre>self.DrawEllipse(<span class="n">400</span>, <span class="n">300</span>, <span class="n">80</span>, <span class="n">40</span>, rotation=<span class="n">30</span>, color=(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawCircleOutline / DrawEllipseOutline</h4>
+<pre>self.DrawCircleOutline(<span class="n">400</span>, <span class="n">300</span>, <span class="n">60</span>, thickness=<span class="n">4</span>, color=(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawCirclesBatch, DrawEllipsesBatch, DrawCircleOutlineBatch, DrawEllipsesOutlineBatch</h4>
+<pre><span class="k">import</span> numpy <span class="k">as</span> np
+centers = np.random.rand(<span class="n">2000</span>, <span class="n">2</span>) * <span class="n">800</span>
+self.DrawCirclesBatch(centers, radius=<span class="n">3.0</span>, colors=(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>,<span class="n">200</span>))</pre>
+</div>
+
+<h2 id="draw-line">Linee</h2>
+<div class="method">
+<h4>DrawLine(x1, y1, x2, y2, thickness=1.0, color=..., alpha=255)</h4>
+<pre>self.DrawLine(<span class="n">0</span>, <span class="n">0</span>, <span class="n">800</span>, <span class="n">600</span>, thickness=<span class="n">2</span>, color=(<span class="n">255</span>,<span class="n">200</span>,<span class="n">0</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawLinesBatch(x1, y1, x2, y2, colors, thickness=1.0, alpha=255, rotation=0.0)</h4>
+<p>Ogni argomento è un array <code>(N,)</code>.</p>
+</div>
+
+<h2 id="draw-tri">Triangoli</h2>
+<div class="method">
+<h4>DrawTriangle(x1,y1,x2,y2,x3,y3,color=..., alpha=255)</h4>
+<pre>self.DrawTriangle(<span class="n">100</span>,<span class="n">300</span>, <span class="n">200</span>,<span class="n">100</span>, <span class="n">300</span>,<span class="n">300</span>, color=(<span class="n">255</span>,<span class="n">100</span>,<span class="n">100</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawTriangleOutline(...), DrawTrianglesBatch(vertices, colors), DrawTrianglesOutlineBatch(...)</h4>
+<pre><span class="c"># vertices shape: (N, 6)  →  x1,y1,x2,y2,x3,y3</span>
+verts = np.array([[<span class="n">0</span>,<span class="n">0</span>, <span class="n">50</span>,<span class="n">0</span>, <span class="n">25</span>,<span class="n">50</span>],
+                  [<span class="n">100</span>,<span class="n">0</span>, <span class="n">150</span>,<span class="n">0</span>, <span class="n">125</span>,<span class="n">50</span>]], dtype=<span class="s">'f4'</span>)
+self.DrawTrianglesBatch(verts, colors=(<span class="n">200</span>,<span class="n">220</span>,<span class="n">255</span>,<span class="n">255</span>))</pre>
+</div>
+
+<h2 id="draw-rtri">Triangoli arrotondati</h2>
+<div class="method">
+<h4>DrawRoundedTriangle(x1,y1,x2,y2,x3,y3, radius, color=..., alpha=255, softness=1.0)</h4>
+<pre>self.DrawRoundedTriangle(<span class="n">100</span>,<span class="n">300</span>, <span class="n">200</span>,<span class="n">100</span>, <span class="n">300</span>,<span class="n">300</span>,
+                         radius=<span class="n">14</span>, color=(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawRoundedTriangleOutline, DrawRoundedTrianglesBatch, DrawRoundedTrianglesOutlineBatch</h4>
+</div>
+
+<h2 id="draw-bezier">Curve di Bézier quadratiche</h2>
+<div class="method">
+<h4>DrawBezierCurve(p0, p1, p2, thickness=2.0, segments=None, smooth=True, color=..., alpha=255)</h4>
+<pre>self.DrawBezierCurve((<span class="n">50</span>,<span class="n">500</span>), (<span class="n">400</span>,<span class="n">50</span>), (<span class="n">750</span>,<span class="n">500</span>),
+                     thickness=<span class="n">3</span>, color=(<span class="n">255</span>,<span class="n">200</span>,<span class="n">0</span>))</pre>
+</div>
+<div class="method">
+<h4>DrawBezierCurvesBatch(p0s, p1s, p2s, thickness=2.0, colors=..., segments=None, smooth=True, alpha=255)</h4>
+</div>
+
+<h2 id="draw-batch">API batch di alto livello (dict-list)</h2>
+<p>Alternativa comoda ai batch NumPy: passi una lista di <code>dict</code>, il motore li impacchetta.</p>
+<div class="method">
+<h4>DrawRects, DrawRectsOutline, DrawRoundedRects, DrawRoundedRectsOutline, DrawLines, DrawTriangles, DrawTrianglesOutline, DrawRoundedTriangles, DrawRoundedTrianglesOutline, DrawEllipses, DrawCircles, DrawEllipsesOutline, DrawCirclesOutline, DrawBezierCurves, DrawSprites, DrawTexts</h4>
+<pre>self.DrawRects([
+    {<span class="s">"x"</span>:<span class="n">10</span>,<span class="s">"y"</span>:<span class="n">10</span>,<span class="s">"w"</span>:<span class="n">40</span>,<span class="s">"h"</span>:<span class="n">40</span>,<span class="s">"color"</span>:(<span class="n">255</span>,<span class="n">0</span>,<span class="n">0</span>)},
+    {<span class="s">"x"</span>:<span class="n">60</span>,<span class="s">"y"</span>:<span class="n">10</span>,<span class="s">"w"</span>:<span class="n">40</span>,<span class="s">"h"</span>:<span class="n">40</span>,<span class="s">"color"</span>:(<span class="n">0</span>,<span class="n">255</span>,<span class="n">0</span>),<span class="s">"rotation"</span>:<span class="n">15</span>},
+])
+
+self.DrawTexts([
+    {<span class="s">"text"</span>:<span class="s">"Hello"</span>, <span class="s">"x"</span>:<span class="n">10</span>, <span class="s">"y"</span>:<span class="n">10</span>, <span class="s">"size"</span>:<span class="n">28</span>, <span class="s">"color"</span>:(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>)},
+    {<span class="s">"text"</span>:<span class="s">"World"</span>, <span class="s">"x"</span>:<span class="n">10</span>, <span class="s">"y"</span>:<span class="n">50</span>, <span class="s">"size"</span>:<span class="n">28</span>, <span class="s">"color"</span>:(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>)},
+])</pre>
+</div>
+
+<!-- ============ TEXTURES ============ -->
+<h2 id="tex-load">Texture &amp; Atlas</h2>
+<div class="method">
+<h4>LoadTexture(name, filepath, filter_mode="LINEAR")</h4>
+<p><code>filter_mode</code>: <code>"LINEAR"</code> o <code>"NEAREST"</code> (pixel-art).</p>
+<pre>self.LoadTexture(<span class="s">"player"</span>, <span class="s">"assets/player.png"</span>, filter_mode=<span class="s">"NEAREST"</span>)</pre>
+</div>
+<div class="method">
+<h4>UnloadTexture(name)</h4>
+<pre>self.UnloadTexture(<span class="s">"player"</span>)</pre>
+</div>
+<div class="method">
+<h4>LoadTextureAtlas(name, filepath)</h4>
+<p>Carica un atlas (PNG). Le sottoregioni si specificano per pixel in <code>DrawTexture</code> con <code>src=(u,v,w,h)</code>.</p>
+</div>
+
+<h2 id="tex-draw">DrawTexture</h2>
+<div class="method">
+<h4>DrawTexture(name, x, y, w=None, h=None, rotation=0.0, alpha=255, flip_x=False, flip_y=False, src=None, color=None)</h4>
+<pre>self.DrawTexture(<span class="s">"player"</span>, <span class="n">100</span>, <span class="n">200</span>)
+self.DrawTexture(<span class="s">"player"</span>, <span class="n">300</span>, <span class="n">200</span>, w=<span class="n">64</span>, h=<span class="n">64</span>,
+                 rotation=<span class="n">45</span>, flip_x=<span class="k">True</span>, alpha=<span class="n">180</span>)</pre>
+</div>
+
+<h2 id="tex-batch">DrawSpritesBatch <span class="badge perf">batch</span></h2>
+<div class="method">
+<h4>DrawSpritesBatch(sprites)</h4>
+<div class="sig">sprites : ndarray (N, 10) — (x, y, w, h, rot_deg, u0, v0, u1, v1, alpha)</div>
+<pre><span class="c"># 10.000 particelle-sprite in un draw call</span>
+N = <span class="n">10_000</span>
+arr = np.zeros((N, <span class="n">10</span>), dtype=<span class="s">'f4'</span>)
+arr[:, <span class="n">0</span>:<span class="n">2</span>] = np.random.rand(N, <span class="n">2</span>) * [<span class="n">800</span>, <span class="n">600</span>]  <span class="c"># pos</span>
+arr[:, <span class="n">2</span>:<span class="n">4</span>] = [<span class="n">8</span>, <span class="n">8</span>]      <span class="c"># size</span>
+arr[:, <span class="n">4</span>]   = <span class="n">0.0</span>         <span class="c"># rot</span>
+arr[:, <span class="n">5</span>:<span class="n">9</span>] = [<span class="n">0</span>, <span class="n">0</span>, <span class="n">1</span>, <span class="n">1</span>]<span class="c"># uv</span>
+arr[:, <span class="n">9</span>]   = <span class="n">255</span>         <span class="c"># alpha</span>
+self.DrawSpritesBatch(arr)</pre>
+</div>
+
+<!-- ============ TEXT ============ -->
+<h2 id="text">Testo — FontManager &amp; DrawText</h2>
+<p><code>WINDOW</code> ha un <code>FontManager</code> interno; le API sono esposte come metodi.</p>
+<div class="method">
+<h4>RegisterFont(alias, path)</h4>
+<pre>self.RegisterFont(<span class="s">"pixel"</span>, <span class="s">"assets/PressStart2P.ttf"</span>)</pre>
+</div>
+<div class="method">
+<h4>MeasureText(text, font="arial", size=24) → (w, h)</h4>
+<pre>w, h = self.MeasureText(<span class="s">"Hello"</span>, font=<span class="s">"pixel"</span>, size=<span class="n">32</span>)</pre>
+</div>
+<div class="method">
+<h4>DrawText(text, x, y, size=24, font="arial", color=(255,255,255), alpha=255, rotation=0.0, anchor="topleft")</h4>
+<p><code>anchor</code>: <code>"topleft"</code>, <code>"center"</code>, <code>"topright"</code>, <code>"bottomleft"</code>, <code>"bottomright"</code>.</p>
+<pre>self.DrawText(<span class="s">"Game Over"</span>, <span class="n">400</span>, <span class="n">300</span>, size=<span class="n">48</span>,
+              color=(<span class="n">255</span>,<span class="n">80</span>,<span class="n">80</span>), anchor=<span class="s">"center"</span>)</pre>
+</div>
+<div class="method">
+<h4>DrawTextBatch(items)</h4>
+<pre>self.DrawTextBatch([
+    {<span class="s">"text"</span>:<span class="s">"HP"</span>,   <span class="s">"x"</span>:<span class="n">10</span>, <span class="s">"y"</span>:<span class="n">10</span>, <span class="s">"size"</span>:<span class="n">20</span>},
+    {<span class="s">"text"</span>:<span class="s">"MP"</span>,   <span class="s">"x"</span>:<span class="n">10</span>, <span class="s">"y"</span>:<span class="n">40</span>, <span class="s">"size"</span>:<span class="n">20</span>, <span class="s">"color"</span>:(<span class="n">120</span>,<span class="n">180</span>,<span class="n">255</span>)},
+])</pre>
+</div>
+
+<!-- ============ COLLISIONS ============ -->
+<h2 id="collide">Collisioni geometriche</h2>
+<p>Tutte le funzioni <code>Collide*</code> sono metodi di <code>WINDOW</code> (via <code>DRAW</code>) e ritornano <code>bool</code> (o array booleani per le versioni <code>Batch</code>).</p>
+
+<h3>Point vs shape</h3>
+<div class="method">
+<pre>self.PointInRect(px, py, x, y, w, h)
+self.PointInEllipse(px, py, cx, cy, rx, ry)
+self.PointInTriangle(px, py, x1,y1, x2,y2, x3,y3)
+self.CollidePointCircle(px, py, cx, cy, r)
+self.CollidePointRotatedRect(px, py, x, y, w, h, rotation)
+self.CollidePointRoundedRect(px, py, x, y, w, h, radius, rotation=<span class="n">0.0</span>)
+self.CollidePointRoundedTriangle(px, py, x1,y1,x2,y2,x3,y3, radius)
+self.CollidePointPolygon(px, py, points)   <span class="c"># points: [(x,y), ...]</span>
+self.CollidePointText(px, py, text, x, y, font=<span class="s">"arial"</span>, size=<span class="n">24</span>, rotation=<span class="n">0.0</span>)
+self.CollidePointTexture(px, py, name, x, y, w=<span class="k">None</span>, h=<span class="k">None</span>,
+                         rotation=<span class="n">0.0</span>, flip_x=<span class="k">False</span>, flip_y=<span class="k">False</span>,
+                         alpha_threshold=<span class="n">1</span>)   <span class="c"># pixel-perfect</span></pre>
+</div>
+
+<h3>Shape vs shape</h3>
+<div class="method">
+<pre>self.CollideRectRect(x1,y1,w1,h1, x2,y2,w2,h2)
+self.CollideCircleCircle(c1x,c1y,r1, c2x,c2y,r2)
+self.CollideRectCircle(rx,ry,rw,rh, cx,cy,cr)
+self.CollideEllipseEllipse(c1x,c1y,r1x,r1y, c2x,c2y,r2x,r2y, rot1=<span class="n">0</span>, rot2=<span class="n">0</span>)
+self.CollideRotatedRectRotatedRect(ax,ay,aw,ah,a_rot, bx,by,bw,bh,b_rot)
+self.CollideTriangleTriangle(a1x,a1y,a2x,a2y,a3x,a3y, b1x,b1y,b2x,b2y,b3x,b3y)
+self.CollideLineLine(x1,y1,x2,y2, x3,y3,x4,y4)
+self.CollideLineRect(x1,y1,x2,y2, rx,ry,rw,rh)
+self.CollideLineCircle(x1,y1,x2,y2, cx,cy,cr)
+<span class="c"># ...e tutte le combinazioni line/rect/rot-rect/circle/ellipse/triangle</span></pre>
+</div>
+
+<h3>Batch (un punto vs N shape)</h3>
+<div class="method">
+<pre>hits = self.CollidePointRectBatch(px, py, x_arr, y_arr, w_arr, h_arr)
+<span class="c"># hits è un ndarray bool di lunghezza N</span>
+hits = self.CollidePointCircleBatch(px, py, cx_arr, cy_arr, r_arr)
+hits = self.CollidePointRotatedRectBatch(px, py, x_arr, y_arr, w_arr, h_arr, rotation_arr)
+hits = self.CollidePointTextureBatch(px_arr, py_arr, name, x_arr, y_arr, ...)</pre>
+</div>
+
+<h2 id="mouse-api">Mouse: helper di alto livello</h2>
+<p>Ogni frame <code>WINDOW.Loop()</code> chiama <code>UpdateMouseState(mx, my, events)</code> per te. Poi puoi usare direttamente questi helper con <b>una qualsiasi shape</b>.</p>
+
+<p>La <em>shape</em> può essere una stringa oppure una data-class:</p>
+<ul>
+<li>Stringa: <code>"rect"</code>, <code>"circle"</code>, <code>"ellipse"</code>, <code>"triangle"</code>, <code>"line"</code>, <code>"rounded_rect"</code>, <code>"rounded_triangle"</code>, <code>"polygon"</code>, <code>"texture"</code>, <code>"text"</code>.</li>
+<li>Data-class: <code>Rect(x,y,w,h)</code>, <code>RotRect(x,y,w,h,rotation)</code>, <code>Circle(cx,cy,r)</code>, <code>Ellipse(cx,cy,rx,ry,rotation=0)</code>, <code>Line(x1,y1,x2,y2,thickness=1)</code>, <code>Triangle(...)</code>, <code>RoundedRect(...)</code>, <code>Polygon(points)</code>, <code>TextureCollider(name,x,y,w,h,rotation=0,flip_x=False,flip_y=False)</code>.</li>
+</ul>
+
+<div class="method">
+<h4>MouseOver / MousePressed / MouseReleased / MouseClicked / MouseHeld / MouseDragging / MouseWheelOn</h4>
+<div class="sig">MouseXxx(shape, *shape_args, button=PE_MOUSE_LEFT, show=False, color=..., camera=None)</div>
+<pre><span class="k">def</span> <span class="f">draw</span>(self):
+    <span class="c"># Bottone: cambia colore quando ci passi sopra, esegue azione al click</span>
+    hovered = self.MouseOver(<span class="s">"rect"</span>, <span class="n">100</span>, <span class="n">100</span>, <span class="n">200</span>, <span class="n">50</span>)
+    color = (<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>) <span class="k">if</span> hovered <span class="k">else</span> (<span class="n">124</span>,<span class="n">156</span>,<span class="n">255</span>)
+    self.DrawRoundedRect(<span class="n">100</span>, <span class="n">100</span>, <span class="n">200</span>, <span class="n">50</span>, radius=<span class="n">10</span>, color=color)
+    self.DrawText(<span class="s">"Play"</span>, <span class="n">200</span>, <span class="n">125</span>, anchor=<span class="s">"center"</span>, color=(<span class="n">0</span>,<span class="n">0</span>,<span class="n">0</span>))
+
+    <span class="k">if</span> self.MouseClicked(<span class="s">"rect"</span>, <span class="n">100</span>, <span class="n">100</span>, <span class="n">200</span>, <span class="n">50</span>):
+        <span class="k">print</span>(<span class="s">"Start!"</span>)
+
+    <span class="c"># Drag su un cerchio</span>
+    <span class="k">if</span> self.MouseDragging(<span class="s">"circle"</span>, self.ball_x, self.ball_y, <span class="n">30</span>):
+        self.ball_x = self.mouse_x
+        self.ball_y = self.mouse_y</pre>
+</div>
+
+<div class="method">
+<h4>MousePosition() → (x, y)</h4>
+<pre>mx, my = self.MousePosition()</pre>
+</div>
+
+<h2 id="collision-check">CheckCollision (universale)</h2>
+<div class="method">
+<h4>CheckCollision(a, b, show=False, color=(0,255,0,255), camera=None)</h4>
+<p>Rileva la collisione tra <b>due</b> shape qualsiasi (mixing consentito). Le shape sono le stesse data-class già viste.</p>
+<pre>a = Rect(<span class="n">100</span>, <span class="n">100</span>, <span class="n">80</span>, <span class="n">80</span>)
+b = Circle(self.player_x, self.player_y, <span class="n">20</span>)
+<span class="k">if</span> self.CheckCollision(a, b):
+    <span class="k">print</span>(<span class="s">"Hit!"</span>)</pre>
+</div>
+
+<!-- ============ INPUT ============ -->
+<h2 id="events">Input — PE_Event</h2>
+<p>Ogni elemento di <code>events</code> passato a <code>update(dt, events)</code> è un <code>PE_Event</code> con questi attributi:</p>
+<table>
+<tr><th>Attributo</th><th>Descrizione</th></tr>
+<tr><td><code>type</code></td><td>Uno di <code>PE_KEYDOWN</code>, <code>PE_KEYUP</code>, <code>PE_MOUSEMOTION</code>, <code>PE_MOUSEDRAG</code>, <code>PE_MOUSEBUTTONDOWN</code>, <code>PE_MOUSEBUTTONUP</code>, <code>PE_MOUSEWHEEL</code>.</td></tr>
+<tr><td><code>key</code></td><td>Codice tasto (per KEYDOWN/KEYUP).</td></tr>
+<tr><td><code>button</code></td><td><code>PE_MOUSE_LEFT/MIDDLE/RIGHT/X1/X2</code>.</td></tr>
+<tr><td><code>x</code>, <code>y</code></td><td>Posizione del cursore (schermo).</td></tr>
+<tr><td><code>dx</code>, <code>dy</code></td><td>Delta di movimento del mouse.</td></tr>
+<tr><td><code>clicks</code></td><td>1 = click singolo, 2 = doppio.</td></tr>
+<tr><td><code>wheel_x</code>, <code>wheel_y</code></td><td>Rotazione rotellina.</td></tr>
+</table>
+
+<pre><span class="k">def</span> <span class="f">update</span>(self, dt, events):
+    <span class="k">for</span> ev <span class="k">in</span> events:
+        <span class="k">if</span> ev.type == PE_KEYDOWN:
+            <span class="k">if</span> ev.key == PE_K_ESCAPE: self.running = <span class="k">False</span>
+            <span class="k">if</span> ev.key == PE_K_SPACE:  self.jump()
+        <span class="k">elif</span> ev.type == PE_MOUSEBUTTONDOWN <span class="k">and</span> ev.button == PE_MOUSE_LEFT:
+            self.shoot(ev.x, ev.y)
+        <span class="k">elif</span> ev.type == PE_MOUSEWHEEL:
+            self.zoom += ev.wheel_y * <span class="n">0.1</span></pre>
+
+<p><b>PE_Event ha anche shortcut di collisione col mouse</b> (rimappano su DRAW):</p>
+<pre><span class="k">for</span> ev <span class="k">in</span> events:
+    <span class="k">if</span> ev.type == PE_MOUSEBUTTONDOWN:
+        <span class="k">if</span> ev.CollideRect(self, <span class="n">100</span>, <span class="n">100</span>, <span class="n">50</span>, <span class="n">50</span>):
+            <span class="k">print</span>(<span class="s">"clic su bottone"</span>)
+        <span class="k">if</span> ev.CollideCircle(self, <span class="n">300</span>, <span class="n">300</span>, <span class="n">40</span>, camera=self.cam):
+            <span class="k">print</span>(<span class="s">"clic su nemico in world-space"</span>)</pre>
+
+<h2 id="keycodes">Costanti tastiera</h2>
+<p>Prefisso <code>PE_K_</code>. Elenco completo:</p>
+<ul>
+<li><b>Lettere:</b> <code>PE_K_a … PE_K_z</code></li>
+<li><b>Numeri riga tastiera:</b> <code>PE_K_0 … PE_K_9</code></li>
+<li><b>Direzionali:</b> <code>PE_K_UP</code>, <code>PE_K_DOWN</code>, <code>PE_K_LEFT</code>, <code>PE_K_RIGHT</code></li>
+<li><b>Azione/controllo:</b> <code>PE_K_SPACE</code>, <code>PE_K_ESCAPE</code>, <code>PE_K_RETURN</code>, <code>PE_K_BACKSPACE</code>, <code>PE_K_TAB</code>, <code>PE_K_INSERT</code>, <code>PE_K_DELETE</code>, <code>PE_K_HOME</code>, <code>PE_K_END</code>, <code>PE_K_PAGEUP</code>, <code>PE_K_PAGEDOWN</code></li>
+<li><b>Sistema:</b> <code>PE_K_CAPSLOCK</code>, <code>PE_K_NUMLOCK</code>, <code>PE_K_SCROLLLOCK</code>, <code>PE_K_PRINTSCREEN</code>, <code>PE_K_PAUSE</code>, <code>PE_K_LSUPER</code>, <code>PE_K_RSUPER</code>, <code>PE_K_MENU</code></li>
+<li><b>Modificatori:</b> <code>PE_K_LCTRL</code>/<code>RCTRL</code>, <code>PE_K_LSHIFT</code>/<code>RSHIFT</code>, <code>PE_K_LALT</code>/<code>RALT</code></li>
+<li><b>Funzione:</b> <code>PE_K_F1 … PE_K_F12</code></li>
+<li><b>Simboli:</b> <code>PE_K_MINUS</code>, <code>PE_K_EQUALS</code>, <code>PE_K_LEFTBRACKET</code>, <code>PE_K_RIGHTBRACKET</code>, <code>PE_K_BACKSLASH</code>, <code>PE_K_SEMICOLON</code>, <code>PE_K_QUOTE</code>, <code>PE_K_BACKQUOTE</code>, <code>PE_K_COMMA</code>, <code>PE_K_PERIOD</code>, <code>PE_K_SLASH</code></li>
+<li><b>Numpad:</b> <code>PE_K_KP_0 … PE_K_KP_9</code>, <code>PE_K_KP_DIVIDE</code>, <code>PE_K_KP_MULTIPLY</code>, <code>PE_K_KP_MINUS</code>, <code>PE_K_KP_PLUS</code>, <code>PE_K_KP_ENTER</code>, <code>PE_K_KP_PERIOD</code></li>
+</ul>
+
+<h2 id="mouse-const">Costanti mouse</h2>
+<table>
+<tr><th>Eventi</th><th>Pulsanti</th></tr>
+<tr>
+<td>
+<code>PE_MOUSEMOTION</code> — solo movimento<br>
+<code>PE_MOUSEDRAG</code> — movimento con pulsante premuto<br>
+<code>PE_MOUSEBUTTONDOWN</code> / <code>PE_MOUSEBUTTONUP</code><br>
+<code>PE_MOUSEWHEEL</code>
+</td>
+<td>
+<code>PE_MOUSE_LEFT</code><br>
+<code>PE_MOUSE_MIDDLE</code><br>
+<code>PE_MOUSE_RIGHT</code><br>
+<code>PE_MOUSE_X1</code> (indietro)<br>
+<code>PE_MOUSE_X2</code> (avanti)
+</td>
+</tr>
+</table>
+<div class="warn"><b>Nota:</b> <code>PE_MOUSEMOTION</code> e <code>PE_MOUSEDRAG</code> sono mutuamente esclusivi per frame. Se ti serve sempre la posizione del cursore, ascoltali entrambi.</div>
+
+<!-- ============ CAMERA ============ -->
+<h2 id="cameragpu">CameraGPU</h2>
+<p>Rendering in un FBO offscreen, blit finale con pan/zoom applicati dalla GPU. Ideale per scene dense (migliaia di sprite).</p>
+<div class="method">
+<h4>Costruttore &amp; ciclo</h4>
+<div class="sig">CameraGPU(window)
+cam.begin()      # da qui tutto va nell'FBO
+cam.end()        # blit su schermo
+cam.release()    # libera l'FBO alla chiusura</div>
+</div>
+<div class="method">
+<h4>API pubblica</h4>
+<pre><span class="c"># Proprietà</span>
+cam.x, cam.y, cam.zoom   <span class="c"># getter/setter</span>
+
+<span class="c"># Movimento</span>
+cam.move(dx, dy)
+cam.center_on(wx, wy)
+cam.follow(target_x, target_y, speed=<span class="n">250</span>, deadzone=<span class="n">0</span>)
+cam.stop_follow()
+
+<span class="c"># Feedback</span>
+cam.shake(intensity=<span class="n">10</span>, duration=<span class="n">0.4</span>)
+
+<span class="c"># Limiti mondo</span>
+cam.set_bounds(min_x, min_y, max_x, max_y)
+cam.clear_bounds()
+
+<span class="c"># Conversione coordinate</span>
+wx, wy = cam.screen_to_world(sx, sy)
+sx, sy = cam.world_to_screen(wx, wy)
+
+<span class="c"># Culling</span>
+<span class="k">if</span> cam.is_visible(wx, wy, w, h, margin=<span class="n">0</span>): ...
+mask = cam.is_visible_batch(rects_np)          <span class="c"># (N,4) rects</span>
+mask = cam.is_visible_batch_numba(rects_np)
+x, y, w, h = cam.viewport_rect()
+
+<span class="c"># Loop tick (per follow/shake)</span>
+cam.update(dt)</pre>
+</div>
+
+<h4>Esempio completo</h4>
+<pre><span class="k">class</span> <span class="f">Game</span>(WINDOW):
+    <span class="k">def</span> <span class="f">__init__</span>(self):
+        <span class="b">super</span>().__init__(title=<span class="s">"CameraGPU"</span>, geometry=(<span class="s">"center"</span>,<span class="s">"center"</span>,<span class="n">800</span>,<span class="n">600</span>))
+        self.cam = CameraGPU(self)
+        self.px, self.py = <span class="n">2000</span>, <span class="n">2000</span>
+        self.cam.set_bounds(<span class="n">0</span>, <span class="n">0</span>, <span class="n">4000</span>, <span class="n">4000</span>)
+
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        speed = <span class="n">300</span>
+        keys = {ev.key <span class="k">for</span> ev <span class="k">in</span> events <span class="k">if</span> ev.type == PE_KEYDOWN}
+        <span class="k">if</span> PE_K_SPACE <span class="k">in</span> keys: self.cam.shake(<span class="n">14</span>, <span class="n">0.35</span>)
+        self.cam.follow(self.px, self.py, speed=<span class="n">400</span>)
+        self.cam.update(dt)
+
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        self.cam.begin()
+        <span class="k">for</span> gx <span class="k">in</span> <span class="b">range</span>(<span class="n">0</span>, <span class="n">4000</span>, <span class="n">100</span>):
+            self.DrawLine(gx, <span class="n">0</span>, gx, <span class="n">4000</span>, color=(<span class="n">50</span>,<span class="n">60</span>,<span class="n">90</span>))
+        self.DrawCircle(self.px, self.py, <span class="n">20</span>, color=(<span class="n">255</span>,<span class="n">200</span>,<span class="n">0</span>))
+        self.cam.end()
+        self.DrawText(f<span class="s">"FPS {self.GetFPS()}"</span>, <span class="n">10</span>, <span class="n">10</span>, size=<span class="n">18</span>)</pre>
+
+<h2 id="cameracpu">CameraCPU</h2>
+<p>Trasformazioni pure Python/NumPy. Zero overhead GPU nascosto. Ideale per scene rade, editor, frustum culling custom. Non ha <code>begin()/end()</code>: applichi <b>tu</b> <code>world_to_screen</code> o <code>apply_rect</code> alle tue coordinate.</p>
+<div class="method">
+<pre>cam = CameraCPU(window)
+
+<span class="c"># Stesse proprietà/metodi di CameraGPU per pan, zoom, follow, shake, bounds...</span>
+cam.follow(player.x, player.y, speed=<span class="n">300</span>)
+cam.update(dt)
+
+<span class="c"># Trasformazioni</span>
+sx, sy = cam.world_to_screen(wx, wy)
+wx, wy = cam.screen_to_world(sx, sy)
+sw, sh = cam.scale(world_w, world_h)
+sx, sy, sw, sh = cam.apply_rect(wx, wy, w, h)
+
+<span class="c"># Batch</span>
+screen_pts = cam.world_to_screen_batch(np.array([[<span class="n">100</span>,<span class="n">200</span>], ...], dtype=<span class="s">'f4'</span>))
+mask = cam.is_visible_batch(rects_np, margin=<span class="n">10</span>)</pre>
+</div>
+
+<h4>Esempio: sprite in world coords</h4>
+<pre><span class="k">def</span> <span class="f">draw</span>(self):
+    <span class="k">for</span> e <span class="k">in</span> self.enemies:
+        sx, sy, sw, sh = self.cam.apply_rect(e.x, e.y, <span class="n">32</span>, <span class="n">32</span>)
+        <span class="k">if</span> self.cam.is_visible(e.x, e.y, <span class="n">32</span>, <span class="n">32</span>):
+            self.DrawRect(sx, sy, sw, sh, color=(<span class="n">255</span>,<span class="n">80</span>,<span class="n">80</span>))</pre>
+
+<!-- ============ TIME ============ -->
+<h2 id="time-frame">PE_TIME — Scheduler a frame</h2>
+<p>Timer <b>non bloccanti</b>, zero thread, aggiornati dal loop principale.</p>
+
+<div class="method">
+<h4>Modulo globale (uno Scheduler condiviso, comodo)</h4>
+<pre>PE_TIME.After(<span class="n">2.0</span>, on_boom)                <span class="c"># callback una volta dopo 2s</span>
+PE_TIME.Every(<span class="n">0.5</span>, spawn, times=<span class="n">10</span>)         <span class="c"># 10 volte ogni 0.5s</span>
+PE_TIME.Every(<span class="n">1.0</span>, tick, immediate=<span class="k">True</span>)   <span class="c"># subito + ogni secondo</span>
+
+<span class="c"># Nel game loop:</span>
+<span class="k">def</span> <span class="f">update</span>(self, dt, events):
+    PE_TIME.Update(dt)
+
+PE_TIME.Cancel(handle)
+PE_TIME.CancelAll()
+<span class="k">print</span>(PE_TIME.Count())   <span class="c"># timer attivi</span></pre>
+</div>
+
+<div class="method">
+<h4>Scheduler dedicato</h4>
+<pre>sch = PE_TIME.Scheduler()
+h = sch.Every(<span class="n">0.1</span>, self.spawn_particle)
+sch.Update(dt)
+sch.Cancel(h)</pre>
+</div>
+
+<h2 id="time-count">Countdown / Cooldown / Stopwatch</h2>
+<div class="method">
+<h4>Countdown(duration)</h4>
+<pre>cd = PE_TIME.Countdown(<span class="n">5.0</span>)
+cd.Start()
+
+<span class="k">def</span> <span class="f">update</span>(self, dt, events):
+    just_expired = cd.Update(dt)
+    <span class="k">if</span> just_expired:
+        <span class="k">print</span>(<span class="s">"Tempo scaduto!"</span>)
+    <span class="k">print</span>(<span class="s">f"progress {cd.progress:.2f}"</span>)</pre>
+</div>
+<div class="method">
+<h4>Cooldown(duration)</h4>
+<pre>fire_cd = PE_TIME.Cooldown(<span class="n">0.3</span>)
+
+<span class="k">def</span> <span class="f">update</span>(self, dt, events):
+    fire_cd.Update(dt)
+    <span class="k">for</span> ev <span class="k">in</span> events:
+        <span class="k">if</span> ev.type == PE_KEYDOWN <span class="k">and</span> ev.key == PE_K_SPACE:
+            <span class="k">if</span> fire_cd.Trigger():   <span class="c"># True se pronto; riavvia il cd</span>
+                self.shoot()</pre>
+</div>
+<div class="method">
+<h4>Stopwatch</h4>
+<pre>sw = PE_TIME.Stopwatch()
+sw.Start()
+...
+sw.Pause()
+<span class="k">print</span>(<span class="s">f"elapsed = {sw.elapsed:.3f}s"</span>)
+sw.Reset()</pre>
+</div>
+
+<h2 id="time-async">AsyncTimer &amp; MainThread</h2>
+<p>Basati su <code>threading</code>, per attese background (I/O, download, calcoli).</p>
+<div class="warn"><b>NON</b> toccare OpenGL/SDL dal callback: accoda con <code>RunOnMainThread(fn, *args)</code> e chiama <code>PumpMainThread()</code> una volta a frame.</div>
+<pre>t = PE_TIME.AsyncAfter(<span class="n">3.0</span>, load_map_from_disk, <span class="s">"level1.json"</span>)
+<span class="k">if</span> t.alive: t.Cancel()
+
+<span class="k">def</span> <span class="f">on_data_ready</span>(data):
+    <span class="c"># chiamato dal thread background</span>
+    PE_TIME.RunOnMainThread(self.apply_data, data)
+
+<span class="k">def</span> <span class="f">update</span>(self, dt, events):
+    PE_TIME.PumpMainThread()   <span class="c"># esegue le callback accodate</span>
+    PE_TIME.Update(dt)</pre>
+
+<!-- ============ PAKER ============ -->
+<h2 id="pack">PE_PAKER — pack()</h2>
+<p>Crea un eseguibile standalone del tuo gioco con <b>cx_Freeze</b>.</p>
+<div class="sig">pack(
+    script: str,
+    *,
+    name="Game",
+    version="1.0.0",
+    description="",
+    author="",
+    output_dir="dist",
+    include_dirs=(),
+    include_files=(),
+    icon=None,
+    console=False,
+    extra_packages=(),
+    extra_excludes=(),
+    optimize=2,
+    clean=True,
+    silent=False,
+) -> Path</div>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> pack
+
+pack(
+    <span class="s">"main.py"</span>,
+    name=<span class="s">"MioGioco"</span>,
+    version=<span class="s">"1.0.0"</span>,
+    author=<span class="s">"Tu"</span>,
+    icon=<span class="s">"assets/icon.ico"</span>,
+    include_dirs=[<span class="s">"assets"</span>],
+    include_files=[<span class="s">"README.md"</span>],
+    console=<span class="k">False</span>,
+    output_dir=<span class="s">"dist"</span>,
+)</pre>
+<div class="note"><b>Requisiti:</b> <code>pip install cx_Freeze</code>. Su Windows, con <code>console=False</code> viene usata la base <code>gui</code> (nessuna console nera).</div>
+
+<!-- ============ RECIPES ============ -->
+<h2 id="recipe-pong">Ricetta 1 — Mini Pong completo</h2>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> *
+
+<span class="k">class</span> <span class="f">Pong</span>(WINDOW):
+    <span class="k">def</span> <span class="f">__init__</span>(self):
+        <span class="b">super</span>().__init__(title=<span class="s">"Pong"</span>, geometry=(<span class="s">"center"</span>,<span class="s">"center"</span>,<span class="n">800</span>,<span class="n">500</span>), VSync=<span class="k">True</span>)
+        self.SetBackground((<span class="n">15</span>,<span class="n">20</span>,<span class="n">40</span>))
+        self.pad_l = <span class="n">200</span>; self.pad_r = <span class="n">200</span>
+        self.bx, self.by = <span class="n">400</span>, <span class="n">250</span>
+        self.vx, self.vy = <span class="n">300</span>, <span class="n">220</span>
+        self.score_l = self.score_r = <span class="n">0</span>
+        self.keys = <span class="b">set</span>()
+
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        <span class="k">for</span> ev <span class="k">in</span> events:
+            <span class="k">if</span> ev.type == PE_KEYDOWN:
+                self.keys.add(ev.key)
+                <span class="k">if</span> ev.key == PE_K_ESCAPE: self.running = <span class="k">False</span>
+            <span class="k">elif</span> ev.type == PE_KEYUP:
+                self.keys.discard(ev.key)
+
+        speed = <span class="n">400</span> * dt
+        <span class="k">if</span> PE_K_w <span class="k">in</span> self.keys: self.pad_l -= speed
+        <span class="k">if</span> PE_K_s <span class="k">in</span> self.keys: self.pad_l += speed
+        <span class="k">if</span> PE_K_UP   <span class="k">in</span> self.keys: self.pad_r -= speed
+        <span class="k">if</span> PE_K_DOWN <span class="k">in</span> self.keys: self.pad_r += speed
+
+        self.bx += self.vx * dt
+        self.by += self.vy * dt
+        <span class="k">if</span> self.by &lt; <span class="n">10</span> <span class="k">or</span> self.by &gt; <span class="n">490</span>: self.vy *= -<span class="n">1</span>
+
+        <span class="k">if</span> self.CollideRectRect(<span class="n">20</span>, self.pad_l, <span class="n">14</span>, <span class="n">100</span>, self.bx-<span class="n">8</span>, self.by-<span class="n">8</span>, <span class="n">16</span>, <span class="n">16</span>):
+            self.vx = <span class="b">abs</span>(self.vx)
+        <span class="k">if</span> self.CollideRectRect(<span class="n">766</span>, self.pad_r, <span class="n">14</span>, <span class="n">100</span>, self.bx-<span class="n">8</span>, self.by-<span class="n">8</span>, <span class="n">16</span>, <span class="n">16</span>):
+            self.vx = -<span class="b">abs</span>(self.vx)
+
+        <span class="k">if</span> self.bx &lt; <span class="n">0</span>:  self.score_r += <span class="n">1</span>; self._reset()
+        <span class="k">if</span> self.bx &gt; <span class="n">800</span>: self.score_l += <span class="n">1</span>; self._reset()
+
+    <span class="k">def</span> <span class="f">_reset</span>(self):
+        self.bx, self.by = <span class="n">400</span>, <span class="n">250</span>
+        self.vx = -self.vx
+
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        self.DrawRect(<span class="n">20</span>, self.pad_l, <span class="n">14</span>, <span class="n">100</span>, color=(<span class="n">124</span>,<span class="n">156</span>,<span class="n">255</span>))
+        self.DrawRect(<span class="n">766</span>, self.pad_r, <span class="n">14</span>, <span class="n">100</span>, color=(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>))
+        self.DrawCircle(self.bx, self.by, <span class="n">8</span>, color=(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>))
+        self.DrawText(f<span class="s">"{self.score_l}   {self.score_r}"</span>, <span class="n">400</span>, <span class="n">30</span>,
+                      size=<span class="n">32</span>, anchor=<span class="s">"center"</span>, color=(<span class="n">255</span>,<span class="n">255</span>,<span class="n">255</span>))
+
+Pong().Loop()</pre>
+
+<h2 id="recipe-particles">Ricetta 2 — 10.000 particelle a 60 FPS</h2>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> *
+<span class="k">import</span> numpy <span class="k">as</span> np
+
+<span class="k">class</span> <span class="f">Particles</span>(WINDOW):
+    <span class="k">def</span> <span class="f">__init__</span>(self):
+        <span class="b">super</span>().__init__(title=<span class="s">"10k particelle"</span>, geometry=(<span class="s">"center"</span>,<span class="s">"center"</span>,<span class="n">1000</span>,<span class="n">700</span>), VSync=<span class="k">True</span>)
+        self.SetBackground((<span class="n">10</span>,<span class="n">10</span>,<span class="n">20</span>))
+        N = <span class="n">10_000</span>
+        self.pos = np.random.rand(N, <span class="n">2</span>).astype(<span class="s">'f4'</span>) * [<span class="n">1000</span>, <span class="n">700</span>]
+        self.vel = (np.random.rand(N, <span class="n">2</span>).astype(<span class="s">'f4'</span>) - <span class="n">0.5</span>) * <span class="n">200</span>
+        self.sz  = np.full((N, <span class="n">2</span>), <span class="n">3.0</span>, dtype=<span class="s">'f4'</span>)
+        self.col = (np.random.rand(N, <span class="n">3</span>) * <span class="n">255</span>).astype(<span class="s">'u1'</span>)
+
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        self.pos += self.vel * dt
+        <span class="c"># bounce sui bordi (vettorializzato)</span>
+        <span class="k">for</span> i, lim <span class="k">in</span> <span class="b">enumerate</span>([<span class="n">1000</span>, <span class="n">700</span>]):
+            m = (self.pos[:, i] &lt; <span class="n">0</span>) | (self.pos[:, i] &gt; lim)
+            self.vel[m, i] *= -<span class="n">1</span>
+            self.pos[:, i] = np.clip(self.pos[:, i], <span class="n">0</span>, lim)
+
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        self.DrawRectsBatch(self.pos, self.sz, self.col)
+        self.DrawText(f<span class="s">"FPS {self.GetFPS()}"</span>, <span class="n">10</span>, <span class="n">10</span>, size=<span class="n">18</span>)
+
+Particles().Loop()</pre>
+
+<h2 id="recipe-platform">Ricetta 3 — Camera che segue il player + click nel mondo</h2>
+<pre><span class="k">from</span> PyBitEngine <span class="k">import</span> *
+
+<span class="k">class</span> <span class="f">World</span>(WINDOW):
+    <span class="k">def</span> <span class="f">__init__</span>(self):
+        <span class="b">super</span>().__init__(title=<span class="s">"World"</span>, geometry=(<span class="s">"center"</span>,<span class="s">"center"</span>,<span class="n">900</span>,<span class="n">600</span>), VSync=<span class="k">True</span>)
+        self.SetBackground((<span class="n">20</span>,<span class="n">24</span>,<span class="n">40</span>))
+        self.cam = CameraGPU(self)
+        self.cam.set_bounds(<span class="n">0</span>, <span class="n">0</span>, <span class="n">3000</span>, <span class="n">2000</span>)
+        self.px, self.py = <span class="n">1500</span>, <span class="n">1000</span>
+        self.enemies = [(x, y) <span class="k">for</span> x <span class="k">in</span> <span class="b">range</span>(<span class="n">100</span>, <span class="n">3000</span>, <span class="n">200</span>)
+                                <span class="k">for</span> y <span class="k">in</span> <span class="b">range</span>(<span class="n">100</span>, <span class="n">2000</span>, <span class="n">200</span>)]
+        self.keys = <span class="b">set</span>()
+
+    <span class="k">def</span> <span class="f">update</span>(self, dt, events):
+        <span class="k">for</span> ev <span class="k">in</span> events:
+            <span class="k">if</span> ev.type == PE_KEYDOWN: self.keys.add(ev.key)
+            <span class="k">elif</span> ev.type == PE_KEYUP: self.keys.discard(ev.key)
+            <span class="c"># Click sul mondo tramite CameraGPU</span>
+            <span class="k">elif</span> ev.type == PE_MOUSEBUTTONDOWN <span class="k">and</span> ev.button == PE_MOUSE_LEFT:
+                wx, wy = self.cam.screen_to_world(ev.x, ev.y)
+                self.enemies = [(x,y) <span class="k">for</span> (x,y) <span class="k">in</span> self.enemies
+                                <span class="k">if</span> (x-wx)**<span class="n">2</span> + (y-wy)**<span class="n">2</span> &gt; <span class="n">30</span>**<span class="n">2</span>]
+
+        v = <span class="n">400</span> * dt
+        <span class="k">if</span> PE_K_a <span class="k">in</span> self.keys <span class="k">or</span> PE_K_LEFT  <span class="k">in</span> self.keys: self.px -= v
+        <span class="k">if</span> PE_K_d <span class="k">in</span> self.keys <span class="k">or</span> PE_K_RIGHT <span class="k">in</span> self.keys: self.px += v
+        <span class="k">if</span> PE_K_w <span class="k">in</span> self.keys <span class="k">or</span> PE_K_UP    <span class="k">in</span> self.keys: self.py -= v
+        <span class="k">if</span> PE_K_s <span class="k">in</span> self.keys <span class="k">or</span> PE_K_DOWN  <span class="k">in</span> self.keys: self.py += v
+
+        self.cam.follow(self.px, self.py, speed=<span class="n">500</span>)
+        self.cam.update(dt)
+
+    <span class="k">def</span> <span class="f">draw</span>(self):
+        self.cam.begin()
+        <span class="c"># griglia</span>
+        <span class="k">for</span> x <span class="k">in</span> <span class="b">range</span>(<span class="n">0</span>, <span class="n">3000</span>, <span class="n">100</span>):
+            self.DrawLine(x, <span class="n">0</span>, x, <span class="n">2000</span>, color=(<span class="n">40</span>,<span class="n">50</span>,<span class="n">80</span>))
+        <span class="k">for</span> y <span class="k">in</span> <span class="b">range</span>(<span class="n">0</span>, <span class="n">2000</span>, <span class="n">100</span>):
+            self.DrawLine(<span class="n">0</span>, y, <span class="n">3000</span>, y, color=(<span class="n">40</span>,<span class="n">50</span>,<span class="n">80</span>))
+        <span class="c"># nemici visibili</span>
+        <span class="k">for</span> (x, y) <span class="k">in</span> self.enemies:
+            <span class="k">if</span> self.cam.is_visible(x-<span class="n">10</span>, y-<span class="n">10</span>, <span class="n">20</span>, <span class="n">20</span>):
+                self.DrawCircle(x, y, <span class="n">10</span>, color=(<span class="n">255</span>,<span class="n">100</span>,<span class="n">100</span>))
+        <span class="c"># player</span>
+        self.DrawCircle(self.px, self.py, <span class="n">14</span>, color=(<span class="n">94</span>,<span class="n">234</span>,<span class="n">212</span>))
+        self.cam.end()
+        <span class="c"># HUD in screen space (fuori da begin/end)</span>
+        self.DrawText(<span class="s">"WASD muovi, click uccidi"</span>, <span class="n">10</span>, <span class="n">10</span>, size=<span class="n">18</span>)
+        self.DrawText(f<span class="s">"Nemici: {len(self.enemies)}"</span>, <span class="n">10</span>, <span class="n">36</span>, size=<span class="n">18</span>)
+
+World().Loop()</pre>
+
+<hr>
+<p style="text-align:center;color:var(--muted);font-size:.85rem;margin-top:2rem">
+PyBitEngine v0.1.3 — Documentazione generata come singolo file HTML.<br>
+<code>from PyBitEngine import *</code> è l'unico import di cui hai bisogno.
+</p>
+
+</main>
+</div>
+</body>
+</html>
