@@ -1,5 +1,6 @@
 import sdl2
 import sdl2.sdlimage as img
+import sdl2.sdlimage as image
 import moderngl
 import time
 import os, ctypes, gc
@@ -117,6 +118,8 @@ class WINDOW(DRAW):
             sdl2.SDL_WINDOW_SHOWN  |
             sdl2.SDL_WINDOW_RESIZABLE
         )
+        self._cursor_cache = {}
+        self._current_cursor = None
 
         if icon != "":
             _set_window_icon(self.window, icon)
@@ -293,6 +296,117 @@ class WINDOW(DRAW):
     # ------------------------------------------------------------------ #
     # Finestra — API pubblica
     # ------------------------------------------------------------------ #
+
+    def SetCursor(self, cursor_type: str | int):
+        """
+        Cambia il cursore del mouse del sistema.
+        Supporta stringhe intuitive o costanti intere di SDL2.
+        """
+        cursor_mapping = {
+            # standard / utility
+            "arrow":      sdl2.SDL_SYSTEM_CURSOR_ARROW,
+            "ibeam":      sdl2.SDL_SYSTEM_CURSOR_IBEAM,       # Testo
+            "wait":       sdl2.SDL_SYSTEM_CURSOR_WAIT,        # Caricamento (clessidra/cerchio)
+            "crosshair":  sdl2.SDL_SYSTEM_CURSOR_CROSSHAIR,   # Mirino
+            "waitarrow":  sdl2.SDL_SYSTEM_CURSOR_WAITARROW,   # Freccia + Caricamento
+            "no":         sdl2.SDL_SYSTEM_CURSOR_NO,          # Vietato / Bloccato
+            "hand":       sdl2.SDL_SYSTEM_CURSOR_HAND,        # Manina / Click
+            
+            # ridimensionamento e direzioni (Tutti quelli supportati da SDL2)
+            "sizenwse":   sdl2.SDL_SYSTEM_CURSOR_SIZENWSE,    # Diagonale alto-sinistra / basso-destra
+            "sizenesw":   sdl2.SDL_SYSTEM_CURSOR_SIZENESW,    # Diagonale alto-destra / basso-sinistra
+            "sizewe":     sdl2.SDL_SYSTEM_CURSOR_SIZEWE,      # Orizzontale (Ovest-Est)
+            "sizens":     sdl2.SDL_SYSTEM_CURSOR_SIZENS,      # Verticale (Nord-Sud)
+            "sizeall":    sdl2.SDL_SYSTEM_CURSOR_SIZEALL,     # Spostamento a 4 frecce
+        }
+
+        if isinstance(cursor_type, str):
+            target = cursor_type.lower()
+            if target not in cursor_mapping:
+                valid_keys = ", ".join(cursor_mapping.keys())
+                raise ValueError(f"Cursore '{cursor_type}' non valido. Scegli tra: {valid_keys}")
+            sdl_id = cursor_mapping[target]
+        else:
+            sdl_id = cursor_type
+
+        if sdl_id not in self._cursor_cache:
+            cursor = sdl2.SDL_CreateSystemCursor(sdl_id)
+            if not cursor: return
+            self._cursor_cache[sdl_id] = cursor
+
+        sdl2.SDL_SetCursor(self._cursor_cache[sdl_id])
+
+    def SetCustomCursor(self, image_path: str, width: int = None, height: int = None, hot_x: int = None, hot_y: int = None):
+        """
+        Carica un'immagine personalizzata (es. PNG), la ridimensiona se specificato, 
+        e la imposta come cursore impostando l'hotspot al centro.
+        """
+        # Creiamo una chiave univoca per la cache che includa le dimensioni richieste
+        cache_key = f"{image_path}_{width}x{height}"
+        if cache_key in self._cursor_cache:
+            sdl2.SDL_SetCursor(self._cursor_cache[cache_key])
+            return
+
+        # Carica la superficie originale tramite SDL_image
+        path_bytes = image_path.encode('utf-8')
+        src_surface = image.IMG_Load(path_bytes)
+        
+        if not src_surface:
+            print(f"Errore nel caricamento dell'immagine cursore: {sdl2.SDL_GetError()}")
+            return
+
+        # Determina le dimensioni finali
+        final_w = width if width is not None else src_surface.contents.w
+        final_h = height if height is not None else src_surface.contents.h
+
+        # Se le dimensioni richieste sono diverse dall'originale, creiamo una nuova superficie scalata
+        if final_w != src_surface.contents.w or final_h != src_surface.contents.h:
+            # Crea una superficie vuota compatibile a 32-bit (RGBA)
+            # Su Windows/Linux i mascheramenti dei bit cambiano a seconda dell'endianness, 
+            # ma lo standard 0x00ff0000, ecc. copre la maggior parte delle strutture RGBA hardware.
+            dst_surface = sdl2.SDL_CreateRGBSurface(
+                0, final_w, final_h, 32, 
+                0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000
+            )
+            
+            if not dst_surface:
+                print(f"Errore nella creazione della superficie di resize: {sdl2.SDL_GetError()}")
+                sdl2.SDL_FreeSurface(src_surface)
+                return
+
+            # Ridimensiona l'immagine copiando src_surface dentro dst_surface
+            sdl2.SDL_BlitScaled(src_surface, None, dst_surface, None)
+            
+            # Liberiamo subito la sorgente originale che non serve più
+            sdl2.SDL_FreeSurface(src_surface)
+            final_surface = dst_surface
+        else:
+            # Se le dimensioni coincidono, usiamo direttamente la superficie originale
+            final_surface = src_surface
+
+        # --- CALCOLO AUTOMATICO HOTSPOT CENTRATO ---
+        actual_hot_x = final_surface.contents.w // 2 if hot_x is None else hot_x
+        actual_hot_y = final_surface.contents.h // 2 if hot_y is None else hot_y
+
+        # Crea il cursore hardware definitivo
+        custom_cursor = sdl2.SDL_CreateColorCursor(final_surface, actual_hot_x, actual_hot_y)
+        
+        # Libera la superficie finale
+        sdl2.SDL_FreeSurface(final_surface)
+
+        if custom_cursor:
+            self._cursor_cache[cache_key] = custom_cursor
+            sdl2.SDL_SetCursor(custom_cursor)
+        else:
+            print(f"Errore nella creazione del cursore colore: {sdl2.SDL_GetError()}")
+
+    def Destroy(self):
+        """Pulisce la memoria eliminando tutti i cursori creati."""
+        if hasattr(self, '_cursor_cache'):
+            for cursor in self._cursor_cache.values():
+                if cursor:
+                    sdl2.SDL_FreeCursor(cursor)
+            self._cursor_cache.clear()
 
     def SetCursorVisible(self, visible: bool):
         """Mostra o nasconde il cursore in base al valore booleano passato."""

@@ -4,6 +4,7 @@ from .PE_KEYS import *
 from . import PE_KEYS as _PE_KEYS
 from .PE_PAKER import pack
 from .PE_WINDOW import WINDOW
+from . import PE_TIME
 
 
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "CameraGPU",
     "CameraCPU",
     "FontManager",
-    "pack"]
+    "pack",
+    "PE_TIME"]
 __all__.extend(_PE_KEYS.__all__)

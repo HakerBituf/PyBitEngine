@@ -261,21 +261,9 @@ class PE_Event:
 
     # --- Rettangoli arrotondati ---------------------------------------------
     def CollideRoundedRect(self, draw, x, y, w, h, radius, rotation=0.0, camera=None):
-        """Point-vs-RoundedRect ESATTO (stesso limite/clamp del radius usato
-        dal rendering). Ruota il punto nel frame locale del rettangolo (dato
-        che la forma RoundedRect di PE_COLLISION non porta la rotazione) poi
-        delega a draw.CheckCollision, che scompone il rounded-rect in
-        rect+4 cerchi — identico alla forma renderizzata."""
+        """Point-vs-RoundedRect diretto: nessun Point/RoundedRect temporaneo."""
         px, py = self._mouse_point(camera)
-        if rotation != 0.0:
-            cx = x + w * 0.5; cy = y + h * 0.5
-            ang = -rotation * 0.017453292519943295
-            cs = _math.cos(ang); sn = _math.sin(ang)
-            dx = px - cx; dy = py - cy
-            px = cx + dx * cs - dy * sn
-            py = cy + dx * sn + dy * cs
-        r = min(radius, min(w, h) * 0.5)
-        return draw.CheckCollision(draw.Point(px, py), draw.RoundedRect(x, y, w, h, r))
+        return draw.CollidePointRoundedRect(px, py, x, y, w, h, radius, rotation)
 
     def CollideRoundedRectBatch(self, draw, x_arr, y_arr, w_arr, h_arr, radius_arr,
                                 rotation_arr=0.0, camera=None):
@@ -395,27 +383,9 @@ class PE_Event:
 
     # --- Testo ---------------------------------------------------------------
     def CollideText(self, draw, text, x, y, font="arial", size=24, rotation=0.0, camera=None):
-        """Point-vs-Text: riusa lo stesso layout glifi di DRAW.DrawText
-        (stesso font/size/rotation) per calcolare il bounding box esatto del
-        testo cosi' come verrebbe renderizzato, poi testa il mouse contro
-        quel rettangolo."""
+        """Point-vs-Text diretto: riusa il layout di DRAW senza wrapper shape."""
         px, py = self._mouse_point(camera)
-        draw._ensure_text_system()
-        laid = draw._layout_string(str(text), font, int(size), reuse=False)
-        if laid is None:
-            return False
-        gx, gy, gw, gh, guv = laid
-        min_x = float(gx.min()); max_x = float((gx + gw).max())
-        min_y = float(gy.min()); max_y = float((gy + gh).max())
-        if rotation != 0.0:
-            ang = -rotation * 0.017453292519943295
-            cs = _math.cos(ang); sn = _math.sin(ang)
-            dx = px - x; dy = py - y
-            lx = dx * cs - dy * sn
-            ly = dx * sn + dy * cs
-        else:
-            lx = px - x; ly = py - y
-        return min_x <= lx <= max_x and min_y <= ly <= max_y
+        return draw.CollidePointText(px, py, text, x, y, font, size, rotation)
 
 
 # --- EVENTI TASTIERA ---

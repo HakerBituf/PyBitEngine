@@ -48,8 +48,8 @@ except ImportError:
 # un'accelerazione. Kernel sequenziale + cache=True (compilato una sola
 # volta, poi sempre veloce) e' la scelta giusta qui.
 @njit(fastmath=True, cache=True)
-def _numba_pack_rect_instances(pos, size, cos_a, sin_a, rgba, out):
-    """Impacchetta (N,10) instance buffer per DrawRectsBatch: pos2+size2+dir2+rgba4."""
+def _numba_pack_rect_instances(pos, size, cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,7) instance buffer per DrawRectsBatch: pos2+size2+dir2+color(1, uint32 packed)."""
     n = pos.shape[0]
     for i in range(n):
         out[i, 0] = pos[i, 0]
@@ -58,14 +58,12 @@ def _numba_pack_rect_instances(pos, size, cos_a, sin_a, rgba, out):
         out[i, 3] = size[i, 1]
         out[i, 4] = cos_a[i]
         out[i, 5] = sin_a[i]
-        out[i, 6] = rgba[i, 0]
-        out[i, 7] = rgba[i, 1]
-        out[i, 8] = rgba[i, 2]
-        out[i, 9] = rgba[i, 3]
+        out[i, 6] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_ellipse_instances(centers, radii, cos_a, sin_a, rgba, out):
+def _numba_pack_ellipse_instances(centers, radii, cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,7) instance buffer: center2+radius2+dir2+color(1, uint32 packed)."""
     n = centers.shape[0]
     for i in range(n):
         out[i, 0] = centers[i, 0]
@@ -74,16 +72,13 @@ def _numba_pack_ellipse_instances(centers, radii, cos_a, sin_a, rgba, out):
         out[i, 3] = radii[i, 1]
         out[i, 4] = cos_a[i]
         out[i, 5] = sin_a[i]
-        out[i, 6] = rgba[i, 0]
-        out[i, 7] = rgba[i, 1]
-        out[i, 8] = rgba[i, 2]
-        out[i, 9] = rgba[i, 3]
+        out[i, 6] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_ellipse_outline_instances(centers, radii, thickness, cos_a, sin_a, rgba, out):
-    """Impacchetta (N,11) instance buffer per DrawEllipsesOutlineBatch/
-    DrawCircleOutlineBatch: center2+radius2+thickness1+dir2+rgba4.
+def _numba_pack_ellipse_outline_instances(centers, radii, thickness, cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,8) instance buffer per DrawEllipsesOutlineBatch/
+    DrawCircleOutlineBatch: center2+radius2+thickness1+dir2+color(1, uint32 packed).
     Stessa architettura/prestazioni di _numba_pack_ellipse_instances
     (kernel Numba compilato, zero overhead Python per istanza)."""
     n = centers.shape[0]
@@ -95,17 +90,14 @@ def _numba_pack_ellipse_outline_instances(centers, radii, thickness, cos_a, sin_
         out[i, 4] = thickness[i]
         out[i, 5] = cos_a[i]
         out[i, 6] = sin_a[i]
-        out[i, 7] = rgba[i, 0]
-        out[i, 8] = rgba[i, 1]
-        out[i, 9] = rgba[i, 2]
-        out[i, 10] = rgba[i, 3]
+        out[i, 7] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_rect_outline_instances(pos, size, thickness, cos_a, sin_a, rgba, out):
-    """Impacchetta (N,11) instance buffer per DrawRectsOutlineBatch:
-    pos2+size2+thickness1+dir2+rgba4. Stessa architettura/prestazioni di
-    _numba_pack_rect_instances."""
+def _numba_pack_rect_outline_instances(pos, size, thickness, cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,8) instance buffer per DrawRectsOutlineBatch:
+    pos2+size2+thickness1+dir2+color(1, uint32 packed). Stessa architettura/
+    prestazioni di _numba_pack_rect_instances."""
     n = pos.shape[0]
     for i in range(n):
         out[i, 0] = pos[i, 0]
@@ -115,14 +107,12 @@ def _numba_pack_rect_outline_instances(pos, size, thickness, cos_a, sin_a, rgba,
         out[i, 4] = thickness[i]
         out[i, 5] = cos_a[i]
         out[i, 6] = sin_a[i]
-        out[i, 7] = rgba[i, 0]
-        out[i, 8] = rgba[i, 1]
-        out[i, 9] = rgba[i, 2]
-        out[i, 10] = rgba[i, 3]
+        out[i, 7] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_line_instances(p1, p2, thick, rgba, out):
+def _numba_pack_line_instances(p1, p2, thick, color_bits, out):
+    """Impacchetta (N,6) instance buffer: p1(2)+p2(2)+thickness(1)+color(1, uint32 packed)."""
     n = p1.shape[0]
     for i in range(n):
         out[i, 0] = p1[i, 0]
@@ -130,21 +120,18 @@ def _numba_pack_line_instances(p1, p2, thick, rgba, out):
         out[i, 2] = p2[i, 0]
         out[i, 3] = p2[i, 1]
         out[i, 4] = thick[i]
-        out[i, 5] = rgba[i, 0]
-        out[i, 6] = rgba[i, 1]
-        out[i, 7] = rgba[i, 2]
-        out[i, 8] = rgba[i, 3]
+        out[i, 5] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_tri_instances(v0, v1, v2, rgba, out):
+def _numba_pack_tri_instances(v0, v1, v2, color_bits, out):
+    """Impacchetta (N,7) instance buffer: v0(2)+v1(2)+v2(2)+color(1, uint32 packed)."""
     n = v0.shape[0]
     for i in range(n):
         out[i, 0] = v0[i, 0]; out[i, 1] = v0[i, 1]
         out[i, 2] = v1[i, 0]; out[i, 3] = v1[i, 1]
         out[i, 4] = v2[i, 0]; out[i, 5] = v2[i, 1]
-        out[i, 6] = rgba[i, 0]; out[i, 7] = rgba[i, 1]
-        out[i, 8] = rgba[i, 2]; out[i, 9] = rgba[i, 3]
+        out[i, 6] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
@@ -180,9 +167,10 @@ def _numba_rotate_lines_arr(x1, y1, x2, y2, cs_arr, sn_arr):
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_line_instances_xy(x1, y1, x2, y2, thick, rgba, out):
+def _numba_pack_line_instances_xy(x1, y1, x2, y2, thick, color_bits, out):
     """Come _numba_pack_line_instances ma legge x/y da 4 array 1D
-    (evita np.column_stack: risparmia 2 allocazioni (N,2) per chiamata)."""
+    (evita np.column_stack: risparmia 2 allocazioni (N,2) per chiamata).
+    Output (N,6): p1(2)+p2(2)+thickness(1)+color(1, uint32 packed)."""
     n = x1.shape[0]
     for i in range(n):
         out[i, 0] = x1[i]
@@ -190,10 +178,7 @@ def _numba_pack_line_instances_xy(x1, y1, x2, y2, thick, rgba, out):
         out[i, 2] = x2[i]
         out[i, 3] = y2[i]
         out[i, 4] = thick[i]
-        out[i, 5] = rgba[i, 0]
-        out[i, 6] = rgba[i, 1]
-        out[i, 7] = rgba[i, 2]
-        out[i, 8] = rgba[i, 3]
+        out[i, 5] = color_bits[i]
 
 
 
@@ -227,20 +212,86 @@ def _numba_clip_rgba(rgba_in, alpha_scalar, use_alpha_scalar, alpha_arr, out):
         out[i, 3] = a
 
 
+# ---------------------------------------------------------------------- #
+# COLOR PACKING (RGBA8 -> singolo uint32 per istanza)
+# ---------------------------------------------------------------------- #
+# PERF FIX (packing colori in UINT): i vecchi instance buffer portavano
+# i_color come vec4 (16 byte/istanza). Impacchettando R,G,B,A in un solo
+# uint32 (4 byte) il vertex shader lo decodifica con pochi bitshift (vedi
+# sostituzione "in uint i_color" + unpack manuale nei vertex shader sopra:
+# GLSL 330 core non garantisce unpackUnorm4x8, che e' core solo da GLSL
+# 4.20/GL_ARB_shading_language_packing, quindi lo shader fa lo shift a
+# mano invece di affidarsi a quella funzione). Risultato: -12 byte/istanza
+# su ogni pipeline instanced (rect/rrect/rtri/ellipse/linee/triangoli/
+# sprite/testo), quindi meno traffico VBO per frame, specialmente evidente
+# con 100k+ istanze.
+#
+# Il trucco per restare a costo zero: la funzione ritorna un array float32
+# il cui pattern di bit e' IDENTICO all'uint32 impacchettato (via
+# numpy .view(), zero conversioni/copie ulteriori). Questo permette di
+# scrivere il valore direttamente in una colonna degli stessi buffer
+# instance float32 pre-allocati (nessun cambio di dtype/struct necessario)
+# — moderngl scrive i byte grezzi sulla GPU e la VAO li reinterpreta come
+# `uint` in base alla format string ("...1u/i"), indipendentemente dal
+# dtype numpy usato per costruirli lato CPU.
+def _pack_rgba_u32_as_f4(rgba):
+    """rgba: array (N,4) di float 0..255 -> array (N,) float32 il cui
+    bit-pattern e' il colore RGBA8 impacchettato (R nel byte basso, A nel
+    byte alto), pronto per essere scritto in una colonna 'float32' di un
+    instance buffer e letto lato GPU come uint (i_color)."""
+    u8 = np.clip(np.asarray(rgba), 0.0, 255.0).astype(np.uint8)
+    packed = (u8[:, 0].astype(np.uint32)
+              | (u8[:, 1].astype(np.uint32) << 8)
+              | (u8[:, 2].astype(np.uint32) << 16)
+              | (u8[:, 3].astype(np.uint32) << 24))
+    return packed.view(np.float32)
+
+
+def _pack_rgba_u32_scalar_as_f4(r, g, b, a):
+    """Variante scalare di _pack_rgba_u32_as_f4, per i path 'immediate'
+    (DrawRoundedRect, DrawRoundedTriangle, ...) che scrivono una singola
+    riga alla volta in un instance buffer preallocato."""
+    r = 0 if r < 0.0 else (255 if r > 255.0 else int(r))
+    g = 0 if g < 0.0 else (255 if g > 255.0 else int(g))
+    b = 0 if b < 0.0 else (255 if b > 255.0 else int(b))
+    a = 0 if a < 0.0 else (255 if a > 255.0 else int(a))
+    packed = np.uint32(r | (g << 8) | (b << 16) | (a << 24))
+    return packed.view(np.float32).item()
+
+
 @njit(fastmath=True, cache=True)
 def _numba_layout_glyphs(gx, gy, gw, gh, guv,
                          origin_x, origin_y, cos_r, sin_r,
-                         r_final, g_final, b_final, a_final, out):
+                         color_bits, out):
     """Layout+rotazione+packing dei glifi per DrawTextBatch.
-    Output (N,14): pos2+size2+dir2+uv4+rgba4 — stesso layout dello sprite batch."""
+    Output (N,11): pos2+size2+dir2+uv4+color(1, uint32 packed) — stesso
+    layout dello sprite batch.
+
+    BUG FIX (rotazione testo): lo shader condiviso sprite_inst_prog calcola
+    world = i_pos + half_size(NON ruotato) + rotate(corner_offset), perche'
+    ogni istanza e' pensata per ruotare attorno al proprio centro FISSO
+    (i_pos + half_size resta costante al variare dell'angolo: e' il
+    comportamento giusto per sprite/rettangoli indipendenti). Prima di
+    questo fix, qui si ruotava solo l'angolo top-left del glifo (lx,ly)
+    attorno all'origine della stringa e si passava quello come i_pos: lo
+    shader ci sommava sopra un half_size NON ruotato, introducendo un
+    offset che cresce con l'angolo -> a rotation!=0 i glifi finivano
+    disallineati (sovrapposti o spostati in verticale), tanto piu' quanto
+    piu' la rotazione era marcata. Ora ruotiamo il CENTRO del glifo attorno
+    all'origine e pre-sottraiamo lo stesso half_size non ruotato che lo
+    shader ri-aggiungera': i due si cancellano e il centro del glifo finisce
+    esattamente su origin + rotate(local_center), come deve essere per un
+    blocco di testo che ruota rigidamente attorno alla propria origine."""
     n = gx.shape[0]
     for i in range(n):
-        lx = gx[i]
-        ly = gy[i]
-        wx = origin_x + lx * cos_r - ly * sin_r
-        wy = origin_y + lx * sin_r + ly * cos_r
-        out[i, 0]  = wx
-        out[i, 1]  = wy
+        half_w = gw[i] * 0.5
+        half_h = gh[i] * 0.5
+        cx = gx[i] + half_w
+        cy = gy[i] + half_h
+        rot_cx = cx * cos_r - cy * sin_r
+        rot_cy = cx * sin_r + cy * cos_r
+        out[i, 0]  = origin_x + rot_cx - half_w
+        out[i, 1]  = origin_y + rot_cy - half_h
         out[i, 2]  = gw[i]
         out[i, 3]  = gh[i]
         out[i, 4]  = cos_r
@@ -249,19 +300,16 @@ def _numba_layout_glyphs(gx, gy, gw, gh, guv,
         out[i, 7]  = guv[i, 1]
         out[i, 8]  = guv[i, 2]
         out[i, 9]  = guv[i, 3]
-        out[i, 10] = r_final
-        out[i, 11] = g_final
-        out[i, 12] = b_final
-        out[i, 13] = a_final
+        out[i, 10] = color_bits
 
 
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_rrect_instances(pos, size, radius, cos_a, sin_a, rgba, out):
-    """Impacchetta (N,11) instance buffer per DrawRoundedRectsBatch:
-    pos2+size2+radius1+dir2+rgba4. Stessa architettura Numba compilata
-    (sequenziale, cache=True) di _numba_pack_rect_instances."""
+def _numba_pack_rrect_instances(pos, size, radius, cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,8) instance buffer per DrawRoundedRectsBatch:
+    pos2+size2+radius1+dir2+color(1, uint32 packed). Stessa architettura
+    Numba compilata (sequenziale, cache=True) di _numba_pack_rect_instances."""
     n = pos.shape[0]
     for i in range(n):
         out[i,  0] = pos[i, 0]
@@ -271,17 +319,14 @@ def _numba_pack_rrect_instances(pos, size, radius, cos_a, sin_a, rgba, out):
         out[i,  4] = radius[i]
         out[i,  5] = cos_a[i]
         out[i,  6] = sin_a[i]
-        out[i,  7] = rgba[i, 0]
-        out[i,  8] = rgba[i, 1]
-        out[i,  9] = rgba[i, 2]
-        out[i, 10] = rgba[i, 3]
+        out[i,  7] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
 def _numba_pack_rrect_outline_instances(pos, size, radius, thickness,
-                                        cos_a, sin_a, rgba, out):
-    """Impacchetta (N,12) instance buffer per DrawRoundedRectsOutlineBatch:
-    pos2+size2+radius1+thickness1+dir2+rgba4."""
+                                        cos_a, sin_a, color_bits, out):
+    """Impacchetta (N,9) instance buffer per DrawRoundedRectsOutlineBatch:
+    pos2+size2+radius1+thickness1+dir2+color(1, uint32 packed)."""
     n = pos.shape[0]
     for i in range(n):
         out[i,  0] = pos[i, 0]
@@ -292,10 +337,7 @@ def _numba_pack_rrect_outline_instances(pos, size, radius, thickness,
         out[i,  5] = thickness[i]
         out[i,  6] = cos_a[i]
         out[i,  7] = sin_a[i]
-        out[i,  8] = rgba[i, 0]
-        out[i,  9] = rgba[i, 1]
-        out[i, 10] = rgba[i, 2]
-        out[i, 11] = rgba[i, 3]
+        out[i,  8] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
@@ -372,9 +414,10 @@ def _rtri_shrink_and_aabb(ax, ay, bx, by, cx, cy, r):
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_rtri_instances(v0, v1, v2, radius, rgba, out):
-    """Impacchetta (N,15) instance buffer per DrawRoundedTrianglesBatch:
-    shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+rgba(4)."""
+def _numba_pack_rtri_instances(v0, v1, v2, radius, color_bits, out):
+    """Impacchetta (N,12) instance buffer per DrawRoundedTrianglesBatch:
+    shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+
+    color(1, uint32 packed)."""
     n = v0.shape[0]
     for i in range(n):
         (sax, say, sbx, sby, scx, scy, r_eff,
@@ -389,16 +432,14 @@ def _numba_pack_rtri_instances(v0, v1, v2, radius, rgba, out):
         out[i,  6] = r_eff
         out[i,  7] = mnx; out[i,  8] = mny
         out[i,  9] = mxx; out[i, 10] = mxy
-        out[i, 11] = rgba[i, 0]
-        out[i, 12] = rgba[i, 1]
-        out[i, 13] = rgba[i, 2]
-        out[i, 14] = rgba[i, 3]
+        out[i, 11] = color_bits[i]
 
 
 @njit(fastmath=True, cache=True)
-def _numba_pack_rtri_outline_instances(v0, v1, v2, radius, thickness, rgba, out):
-    """Impacchetta (N,16) instance buffer per DrawRoundedTrianglesOutlineBatch:
-    shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+thickness(1)+rgba(4)."""
+def _numba_pack_rtri_outline_instances(v0, v1, v2, radius, thickness, color_bits, out):
+    """Impacchetta (N,13) instance buffer per DrawRoundedTrianglesOutlineBatch:
+    shrunkV0(2)+shrunkV1(2)+shrunkV2(2)+r_eff(1)+aabb_min(2)+aabb_max(2)+
+    thickness(1)+color(1, uint32 packed)."""
     n = v0.shape[0]
     for i in range(n):
         (sax, say, sbx, sby, scx, scy, r_eff,
@@ -414,10 +455,7 @@ def _numba_pack_rtri_outline_instances(v0, v1, v2, radius, thickness, rgba, out)
         out[i,  7] = mnx; out[i,  8] = mny
         out[i,  9] = mxx; out[i, 10] = mxy
         out[i, 11] = thickness[i]
-        out[i, 12] = rgba[i, 0]
-        out[i, 13] = rgba[i, 1]
-        out[i, 14] = rgba[i, 2]
-        out[i, 15] = rgba[i, 3]
+        out[i, 12] = color_bits[i]
 
 
 # ---------------------------------------------------------------------- #
@@ -624,6 +662,19 @@ class _GlyphAtlas:
 # _numba_pack_rect_instances lo sostituisce).
 
 class TextureAtlas:
+    # BUG FIX (atlas bleeding): l'atlas usa filtro LINEAR (bilineare) ma le
+    # sub-texture venivano impacchettate perfettamente a contatto l'una con
+    # l'altra, senza alcun margine. Con LINEAR, campionare un texel vicino al
+    # bordo di una regione fa sì che la GPU interpoli anche pixel della
+    # regione ADIACENTE nell'atlas: per i glifi di testo questo produce
+    # sottili "lineette" colorate sopra/sotto/accanto alle lettere, perché
+    # si vede un filo del glifo impacchettato subito accanto. PADDING px di
+    # bordo trasparente attorno a ogni immagine inserita eliminano il
+    # bleeding: le UV restituite continuano a puntare solo al contenuto
+    # reale (il padding non è mai visibile), ma lo spazio vuoto impedisce
+    # il campionamento di texel estranei.
+    PADDING = 2
+
     def __init__(self, ctx, initial_size=4096, max_size=16384):
         if initial_size <= 0:
             raise ValueError("TextureAtlas initial_size must be > 0")
@@ -638,7 +689,29 @@ class TextureAtlas:
         self.free_rects = [(0, 0, self.size, self.size)]   # (x, y, w, h)
         self.uv_map = {}          # name -> (u0, v0, u1, v1)
         self.texture_data = {}    # name -> (numpy_array, w, h)  per poter ricostruire l'atlas
-        self.name_to_rect = {}    # name -> (x, y, w, h)  occupato nell'atlas (fix bug 1/2)
+        self.name_to_rect = {}    # name -> (x, y, w, h)  occupato nell'atlas, PADDING incluso (fix bug 1/2)
+
+    def _packed_rect_for(self, w, h):
+        """Calcola la dimensione (con padding) da richiedere all'allocatore
+        per un'immagine w x h, con fallback a 0 padding se anche il solo
+        contenuto reale non ci starebbe (immagini enormi vicine a max_size)."""
+        pad = self.PADDING
+        pw, ph = w + 2 * pad, h + 2 * pad
+        if pw > self.max_size or ph > self.max_size:
+            pad = 0
+            pw, ph = w, h
+        return pad, pw, ph
+
+    def _write_padded(self, img_arr, x, y, w, h, pad):
+        """Scrive img_arr nell'atlas centrato in un riquadro (w+2*pad, h+2*pad)
+        con bordo trasparente, e ritorna (inner_x, inner_y) del contenuto reale."""
+        if pad == 0:
+            self.tex.write(img_arr.tobytes(), viewport=(x, y, w, h))
+            return x, y
+        padded = np.zeros((h + 2 * pad, w + 2 * pad, 4), dtype=np.uint8)
+        padded[pad:pad + h, pad:pad + w] = img_arr
+        self.tex.write(padded.tobytes(), viewport=(x, y, w + 2 * pad, h + 2 * pad))
+        return x + pad, y + pad
 
     def add(self, name, img_data, w, h):
         """Aggiunge un'immagine all'atlas. Se non c'è spazio, espande l'atlas."""
@@ -680,27 +753,30 @@ class TextureAtlas:
         if name in self.uv_map:
             self._remove(name)
 
-        # Prova ad allocare con MaxRects
-        rect = self._find_rect(w, h)
+        # Prova ad allocare con MaxRects, riservando anche il padding
+        # anti-bleeding attorno all'immagine (vedi PADDING sopra).
+        pad, pw, ph = self._packed_rect_for(w, h)
+        rect = self._find_rect(pw, ph)
         if rect is None:
             # Se fallisce, espandi l'atlas e riprova
             self._expand_atlas()
-            rect = self._find_rect(w, h)
+            pad, pw, ph = self._packed_rect_for(w, h)
+            rect = self._find_rect(pw, ph)
             if rect is None:
                 raise RuntimeError(f"Unable to insert {w}x{h} even after expanding atlas")
 
         x, y, rw, rh = rect
-        # Scrivi i pixel
-        self.tex.write(img_arr.tobytes(), viewport=(x, y, w, h))
-        # Calcola UV
-        u0 = x / self.size
-        v0 = y / self.size
-        u1 = (x + w) / self.size
-        v1 = (y + h) / self.size
+        # Scrivi i pixel (con bordo trasparente di padding attorno)
+        inner_x, inner_y = self._write_padded(img_arr, x, y, w, h, pad)
+        # Calcola UV: puntano SOLO al contenuto reale, mai al padding
+        u0 = inner_x / self.size
+        v0 = inner_y / self.size
+        u1 = (inner_x + w) / self.size
+        v1 = (inner_y + h) / self.size
         self.uv_map[name] = (u0, v0, u1, v1)
         # Conserva i dati originali per future espansioni
         self.texture_data[name] = (img_arr.copy(), w, h)
-        self.name_to_rect[name] = (x, y, w, h)
+        self.name_to_rect[name] = (x, y, pw, ph)
         return True
 
     def _remove(self, name):
@@ -906,18 +982,19 @@ class TextureAtlas:
 
         for name in sorted_names:
             img_arr, w, h = self.texture_data[name]
-            rect = self._find_rect(w, h)
+            pad, pw, ph = self._packed_rect_for(w, h)
+            rect = self._find_rect(pw, ph)
             if rect is None:
                 # Dovrebbe sempre funzionare dato che l'atlas è più grande
                 raise RuntimeError(f"Failed to repack {name} during expansion")
             x, y, _, _ = rect
-            self.tex.write(img_arr.tobytes(), viewport=(x, y, w, h))
-            u0 = x / self.size
-            v0 = y / self.size
-            u1 = (x + w) / self.size
-            v1 = (y + h) / self.size
+            inner_x, inner_y = self._write_padded(img_arr, x, y, w, h, pad)
+            u0 = inner_x / self.size
+            v0 = inner_y / self.size
+            u1 = (inner_x + w) / self.size
+            v1 = (inner_y + h) / self.size
             self.uv_map[name] = (u0, v0, u1, v1)
-            self.name_to_rect[name] = (x, y, w, h)
+            self.name_to_rect[name] = (x, y, pw, ph)
 
         # Rilascia la vecchia texture
         old_tex.release()
@@ -1118,15 +1195,121 @@ def _point_in_polygon(px, py, pts):
 
 
 def _seg_seg_intersect(ax, ay, bx, by, cx, cy, dx, dy):
+    eps = _EPS
     def orient(px, py, qx, qy, rx, ry):
         return (qx-px)*(ry-py) - (qy-py)*(rx-px)
+    def on_segment(px, py, qx, qy, rx, ry):
+        return (min(px, qx) - eps <= rx <= max(px, qx) + eps and
+                min(py, qy) - eps <= ry <= max(py, qy) + eps)
     o1 = orient(ax, ay, bx, by, cx, cy)
     o2 = orient(ax, ay, bx, by, dx, dy)
     o3 = orient(cx, cy, dx, dy, ax, ay)
     o4 = orient(cx, cy, dx, dy, bx, by)
+    if abs(o1) <= eps and on_segment(ax, ay, bx, by, cx, cy):
+        return True
+    if abs(o2) <= eps and on_segment(ax, ay, bx, by, dx, dy):
+        return True
+    if abs(o3) <= eps and on_segment(cx, cy, dx, dy, ax, ay):
+        return True
+    if abs(o4) <= eps and on_segment(cx, cy, dx, dy, bx, by):
+        return True
     if (o1 > 0) != (o2 > 0) and (o3 > 0) != (o4 > 0):
         return True
     return False
+
+
+def _segment_intersects_ellipse_pure(x1, y1, x2, y2, cx, cy, rx, ry, rotation=0.0):
+    if rx <= 0.0 or ry <= 0.0:
+        return False
+    if rotation != 0.0:
+        ang = -rotation * _DEG2RAD_CONST
+        cs = math.cos(ang); sn = math.sin(ang)
+        dx1 = x1 - cx; dy1 = y1 - cy
+        dx2 = x2 - cx; dy2 = y2 - cy
+        x1 = dx1 * cs - dy1 * sn; y1 = dx1 * sn + dy1 * cs
+        x2 = dx2 * cs - dy2 * sn; y2 = dx2 * sn + dy2 * cs
+    else:
+        x1 -= cx; y1 -= cy; x2 -= cx; y2 -= cy
+    dx = x2 - x1; dy = y2 - y1
+    irx2 = 1.0 / (rx * rx); iry2 = 1.0 / (ry * ry)
+    c = x1 * x1 * irx2 + y1 * y1 * iry2 - 1.0
+    if c <= 0.0:
+        return True
+    if x2 * x2 * irx2 + y2 * y2 * iry2 - 1.0 <= 0.0:
+        return True
+    a = dx * dx * irx2 + dy * dy * iry2
+    if a <= _EPS:
+        return False
+    b = 2.0 * (x1 * dx * irx2 + y1 * dy * iry2)
+    disc = b * b - 4.0 * a * c
+    if disc < 0.0:
+        return False
+    sq = math.sqrt(disc)
+    i2a = 0.5 / a
+    t1 = (-b - sq) * i2a
+    t2 = (-b + sq) * i2a
+    return (0.0 <= t1 <= 1.0) or (0.0 <= t2 <= 1.0)
+
+
+def _point_in_rounded_rect_direct(px, py, x, y, w, h, radius, rotation=0.0):
+    if w <= 0.0 or h <= 0.0:
+        return False
+    cx = x + w * 0.5; cy = y + h * 0.5
+    if rotation != 0.0:
+        ang = -rotation * _DEG2RAD_CONST
+        cs = math.cos(ang); sn = math.sin(ang)
+        dx = px - cx; dy = py - cy
+        px = dx * cs - dy * sn
+        py = dx * sn + dy * cs
+    else:
+        px -= cx; py -= cy
+    hw = w * 0.5; hh = h * 0.5
+    r = max(0.0, min(float(radius), hw, hh))
+    qx = abs(px) - hw + r
+    qy = abs(py) - hh + r
+    outside = math.hypot(max(qx, 0.0), max(qy, 0.0))
+    inside = min(max(qx, qy), 0.0)
+    return inside + outside - r <= 0.0
+
+
+def _sd_triangle_direct(px, py, ax, ay, bx, by, cx, cy):
+    e0x, e0y = bx - ax, by - ay
+    e1x, e1y = cx - bx, cy - by
+    e2x, e2y = ax - cx, ay - cy
+    v0x, v0y = px - ax, py - ay
+    v1x, v1y = px - bx, py - by
+    v2x, v2y = px - cx, py - cy
+
+    def closest_sq(vx, vy, ex, ey):
+        den = ex * ex + ey * ey
+        t = 0.0 if den <= _EPS else max(0.0, min(1.0, (vx * ex + vy * ey) / den))
+        qx = vx - ex * t; qy = vy - ey * t
+        return qx * qx + qy * qy
+
+    s = 1.0 if (e0x * e2y - e0y * e2x) >= 0.0 else -1.0
+    dx = min(closest_sq(v0x, v0y, e0x, e0y),
+             closest_sq(v1x, v1y, e1x, e1y),
+             closest_sq(v2x, v2y, e2x, e2y))
+    dy = min(s * (v0x * e0y - v0y * e0x),
+             s * (v1x * e1y - v1y * e1x),
+             s * (v2x * e2y - v2y * e2x))
+    return -math.sqrt(dx) * (1.0 if dy >= 0.0 else -1.0)
+
+
+def _point_in_rounded_triangle_direct(px, py, x1, y1, x2, y2, x3, y3, radius, rotation=0.0):
+    if rotation != 0.0:
+        cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+        cs = math.cos(rotation * _DEG2RAD_CONST); sn = math.sin(rotation * _DEG2RAD_CONST)
+        dx1 = x1 - cx; dy1 = y1 - cy
+        dx2 = x2 - cx; dy2 = y2 - cy
+        dx3 = x3 - cx; dy3 = y3 - cy
+        x1 = cx + dx1 * cs - dy1 * sn; y1 = cy + dx1 * sn + dy1 * cs
+        x2 = cx + dx2 * cs - dy2 * sn; y2 = cy + dx2 * sn + dy2 * cs
+        x3 = cx + dx3 * cs - dy3 * sn; y3 = cy + dx3 * sn + dy3 * cs
+    sax, say, sbx, sby, scx, scy, r_eff, _mnx, _mny, _mxx, _mxy = _rtri_shrink_and_aabb(
+        float(x1), float(y1), float(x2), float(y2), float(x3), float(y3), float(radius)
+    )
+    return (_sd_triangle_direct(px, py, sax, say, sbx, sby, scx, scy) - r_eff) <= 0.0
 
 
 def _polygon_aabb_overlap(a_aabb, b_aabb):
@@ -1362,10 +1545,16 @@ def _rect_ellipse(a, b, draw):
     r = _use_draw(draw, "CollideRectEllipse", a.x, a.y, a.w, a.h,
                   b.cx, b.cy, b.rx, b.ry, b.rotation)
     if r is not None: return bool(r)
-    # Fallback grezzo: 4 vertici rect vs ellisse + centro ellisse vs rect
+    # Fallback completo: centro/vertici + intersezione esatta lato-ellisse.
     if _pt_rect(Point(b.cx, b.cy), a, draw): return True
     for (px, py) in ((a.x,a.y),(a.x+a.w,a.y),(a.x+a.w,a.y+a.h),(a.x,a.y+a.h)):
         if _pt_ellipse(Point(px,py), b, draw): return True
+    for (x1, y1, x2, y2) in ((a.x, a.y, a.x+a.w, a.y),
+                             (a.x+a.w, a.y, a.x+a.w, a.y+a.h),
+                             (a.x+a.w, a.y+a.h, a.x, a.y+a.h),
+                             (a.x, a.y+a.h, a.x, a.y)):
+        if _segment_intersects_ellipse_pure(x1, y1, x2, y2, b.cx, b.cy, b.rx, b.ry, b.rotation):
+            return True
     return False
 
 def _rect_tri(a, b, draw):
@@ -1409,7 +1598,7 @@ def _rotrect_ellipse(a, b, draw):
                   b.cx, b.cy, b.rx, b.ry, b.rotation,
                   a.x, a.y, a.w, a.h, a.rotation)
     if r is not None: return bool(r)
-    return _rect_ellipse(Rect(a.x, a.y, a.w, a.h), b, draw)
+    return _dispatch_polygon(Polygon(_rect_corners(a.x, a.y, a.w, a.h, a.rotation)), b, draw)
 
 def _rotrect_tri(a, b, draw):
     r = _use_draw(draw, "CollideTriangleRotatedRect",
@@ -1508,7 +1697,8 @@ def _ellipse_line(a, b, draw):
     if r is not None: return bool(r)
     if _pt_ellipse(Point(b.x1, b.y1), a, draw): return True
     if _pt_ellipse(Point(b.x2, b.y2), a, draw): return True
-    return False
+    return _segment_intersects_ellipse_pure(b.x1, b.y1, b.x2, b.y2,
+                                            a.cx, a.cy, a.rx, a.ry, a.rotation)
 
 def _tri_tri(a, b, draw):
     r = _use_draw(draw, "CollideTriangleTriangle",
@@ -1630,10 +1820,17 @@ def _dispatch_polygon(a, b, draw):
         for i in range(n):
             x1, y1 = pts[i]
             x2, y2 = pts[(i + 1) % n]
-            if DRAW._segment_intersects_ellipse(
-                x1, y1, x2, y2,
-                b.cx, b.cy, b.rx, b.ry, b.rotation
-            ):
+            if draw is not None:
+                hit = draw._segment_intersects_ellipse(
+                    x1, y1, x2, y2,
+                    b.cx, b.cy, b.rx, b.ry, b.rotation
+                )
+            else:
+                hit = _segment_intersects_ellipse_pure(
+                    x1, y1, x2, y2,
+                    b.cx, b.cy, b.rx, b.ry, b.rotation
+                )
+            if hit:
                 return True
         return False
     raise TypeError(f"Polygon vs {b.__class__.__name__} non supportato")
@@ -2139,7 +2336,7 @@ class DRAW:
                 // vertice (= 8 per quad) eseguite sulla GPU.
                 in vec2 i_dir;  // (cos(rotation), sin(rotation))
                 in vec4 i_uv;        // u0, v0, u1, v1
-                in vec4 i_color;     // 0..255 (RGBA) — tint moltiplicativo
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)     // 0..255 (RGBA) — tint moltiplicativo
                 uniform vec2 u_resolution;
                 out vec2 v_uv;
                 out vec4 v_color;
@@ -2167,7 +2364,7 @@ class DRAW:
                     // FIX: passiamo un vec4 RGBA in [0,255] (coerente con
                     // gli altri instance program). Il fragment moltiplica per
                     // la texture del glifo (bianca) => tint colore + alpha.
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2189,9 +2386,10 @@ class DRAW:
         self.sprite_inst_vbo = self.ctx.buffer(quad.tobytes())
         self.sprite_inst_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 11 float/istanza: pos(2)+size(2)+dir(2)+uv(4)+alpha(1)
+        # 11 float-slot/istanza: pos(2)+size(2)+dir(2)+uv(4)+color(1, uint32
+        # packed RGBA8 — vedi _pack_rgba_u32_as_f4).
         self.sprite_inst_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 14 * 4,
+            reserve=self.max_rects * 11 * 4,
             dynamic=True
         )
 
@@ -2199,7 +2397,7 @@ class DRAW:
             self.sprite_inst_prog,
             [
                 (self.sprite_inst_vbo, "2f", "in_corner"),
-                (self.sprite_inst_instance_vbo, "2f 2f 2f 4f 4f/i",
+                (self.sprite_inst_instance_vbo, "2f 2f 2f 4f 1u/i",
                 "i_pos", "i_size", "i_dir", "i_uv", "i_color"),
             ],
             index_buffer=self.sprite_inst_ibo
@@ -2222,7 +2420,7 @@ class DRAW:
                 in vec2 i_radius;      // rx, ry
                 // PERF FIX: cos/sin precalcolati su CPU e passati come vec2.
                 in vec2 i_dir;         // (cos(rotation), sin(rotation))
-                in vec4 i_color;       // 0..255
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)       // 0..255
 
                 uniform vec2 u_resolution;
 
@@ -2252,7 +2450,7 @@ class DRAW:
 
                     // coordinate locali del quad, usate nel fragment per il test ellisse
                     v_local = in_corner;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2302,7 +2500,7 @@ class DRAW:
 
         # 10 float/istanza: center(2)+radius(2)+dir(2)+color(4)
         self.ellipse_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 10 * 4,
+            reserve=self.max_rects * 7 * 4,
             dynamic=True
         )
 
@@ -2310,7 +2508,7 @@ class DRAW:
             self.ellipse_prog,
             [
                 (self.ellipse_vbo, "2f", "in_corner"),
-                (self.ellipse_instance_vbo, "2f 2f 2f 4f/i",
+                (self.ellipse_instance_vbo, "2f 2f 2f 1u/i",
                 "i_center", "i_radius", "i_dir", "i_color"),
             ],
             index_buffer=self.ellipse_ibo
@@ -2334,7 +2532,7 @@ class DRAW:
                 in vec2 i_radius;      // rx, ry (raggio ESTERNO)
                 in float i_thickness;  // spessore anello, in unità mondo
                 in vec2 i_dir;         // (cos(rotation), sin(rotation))
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
 
                 uniform vec2 u_resolution;
 
@@ -2367,7 +2565,7 @@ class DRAW:
                     // con la stessa equazione parametrica del bordo esterno.
                     vec2 inner_r = max(i_radius - vec2(i_thickness), vec2(0.0));
                     v_inner_ratio = inner_r / max(i_radius, vec2(1e-6));
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2412,7 +2610,7 @@ class DRAW:
 
         # 11 float/istanza: center(2)+radius(2)+thickness(1)+dir(2)+color(4)
         self.ellipse_outline_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 11 * 4,
+            reserve=self.max_rects * 8 * 4,
             dynamic=True
         )
 
@@ -2420,7 +2618,7 @@ class DRAW:
             self.ellipse_outline_prog,
             [
                 (self.ellipse_outline_vbo, "2f", "in_corner"),
-                (self.ellipse_outline_instance_vbo, "2f 2f 1f 2f 4f/i",
+                (self.ellipse_outline_instance_vbo, "2f 2f 1f 2f 1u/i",
                 "i_center", "i_radius", "i_thickness", "i_dir", "i_color"),
             ],
             index_buffer=self.ellipse_outline_ibo
@@ -2442,7 +2640,7 @@ class DRAW:
                 // passiamo direttamente il vettore direzione (cos, sin) precalcolato
                 // una sola volta sulla CPU con NumPy vettorizzato.
                 in vec2 i_dir;  // (cos(rotation), sin(rotation))
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
                 out vec4 v_color;
                 out vec2 v_local;       // FIX AA: coordinate locali in pixel, centrate
@@ -2459,7 +2657,7 @@ class DRAW:
                     vec2 norm = world / u_resolution * 2.0 - 1.0;
                     norm.y = -norm.y;
                     gl_Position = vec4(norm, 0.0, 1.0);
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                     v_local = local;
                     v_half_size = half_size;
                 }
@@ -2488,9 +2686,10 @@ class DRAW:
         self.rect_inst_vbo = self.ctx.buffer(quad.tobytes())
         self.rect_inst_ibo = self.ctx.buffer(indices.tobytes())
 
-        # Buffer dinamico standard — ora 10 float/istanza: pos(2)+size(2)+dir(2)+color(4)
+        # Buffer dinamico standard — ora 7 float-slot/istanza: pos(2)+size(2)+
+        # dir(2)+color(1, uint32 packed RGBA8 — vedi _pack_rgba_u32_as_f4).
         self.rect_inst_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 10 * 4,
+            reserve=self.max_rects * 7 * 4,
             dynamic=True
         )
 
@@ -2498,7 +2697,7 @@ class DRAW:
             self.rect_inst_prog,
             [
                 (self.rect_inst_vbo, "2f", "in_corner"),
-                (self.rect_inst_instance_vbo, "2f 2f 2f 4f/i",
+                (self.rect_inst_instance_vbo, "2f 2f 2f 1u/i",
                 "i_pos", "i_size", "i_dir", "i_color"),
             ],
             index_buffer=self.rect_inst_ibo
@@ -2520,7 +2719,7 @@ class DRAW:
                 in vec2 i_size;
                 in float i_thickness;
                 in vec2 i_dir;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
 
                 out vec2 v_local;       // coordinate locali in pixel, centrate
@@ -2543,7 +2742,7 @@ class DRAW:
                     v_local = local;
                     v_half_size = half_size;
                     v_thickness = i_thickness;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2577,9 +2776,9 @@ class DRAW:
         self.rect_outline_vbo = self.ctx.buffer(quad.tobytes())
         self.rect_outline_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 11 float/istanza: pos(2)+size(2)+thickness(1)+dir(2)+color(4)
+        # 8 float-slot/istanza: pos(2)+size(2)+thickness(1)+dir(2)+color(1, uint32 packed)
         self.rect_outline_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 11 * 4,
+            reserve=self.max_rects * 8 * 4,
             dynamic=True
         )
 
@@ -2587,7 +2786,7 @@ class DRAW:
             self.rect_outline_prog,
             [
                 (self.rect_outline_vbo, "2f", "in_corner"),
-                (self.rect_outline_instance_vbo, "2f 2f 1f 2f 4f/i",
+                (self.rect_outline_instance_vbo, "2f 2f 1f 2f 1u/i",
                 "i_pos", "i_size", "i_thickness", "i_dir", "i_color"),
             ],
             index_buffer=self.rect_outline_ibo
@@ -2610,7 +2809,7 @@ class DRAW:
                 in vec2 i_size;
                 in float i_radius;
                 in vec2 i_dir;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
 
                 out vec2 v_local;
@@ -2632,7 +2831,7 @@ class DRAW:
                     v_local = local;
                     v_half_size = half_size;
                     v_radius = i_radius;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2666,16 +2865,16 @@ class DRAW:
         self.rrect_vbo = self.ctx.buffer(quad.tobytes())
         self.rrect_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 11 float/istanza: pos(2)+size(2)+radius(1)+dir(2)+color(4)
+        # 8 float-slot/istanza: pos(2)+size(2)+radius(1)+dir(2)+color(1, uint32 packed)
         self.rrect_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 11 * 4,
+            reserve=self.max_rects * 8 * 4,
             dynamic=True,
         )
         self.rrect_vao = self.ctx.vertex_array(
             self.rrect_prog,
             [
                 (self.rrect_vbo, "2f", "in_corner"),
-                (self.rrect_instance_vbo, "2f 2f 1f 2f 4f/i",
+                (self.rrect_instance_vbo, "2f 2f 1f 2f 1u/i",
                  "i_pos", "i_size", "i_radius", "i_dir", "i_color"),
             ],
             index_buffer=self.rrect_ibo,
@@ -2695,7 +2894,7 @@ class DRAW:
                 in float i_radius;
                 in float i_thickness;
                 in vec2 i_dir;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
 
                 out vec2 v_local;
@@ -2719,7 +2918,7 @@ class DRAW:
                     v_half_size = half_size;
                     v_radius = i_radius;
                     v_thickness = i_thickness;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2757,16 +2956,16 @@ class DRAW:
         self.rrect_outline_vbo = self.ctx.buffer(quad.tobytes())
         self.rrect_outline_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 12 float/istanza: pos(2)+size(2)+radius(1)+thickness(1)+dir(2)+color(4)
+        # 9 float-slot/istanza: pos(2)+size(2)+radius(1)+thickness(1)+dir(2)+color(1, uint32 packed)
         self.rrect_outline_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 12 * 4,
+            reserve=self.max_rects * 9 * 4,
             dynamic=True,
         )
         self.rrect_outline_vao = self.ctx.vertex_array(
             self.rrect_outline_prog,
             [
                 (self.rrect_outline_vbo, "2f", "in_corner"),
-                (self.rrect_outline_instance_vbo, "2f 2f 1f 1f 2f 4f/i",
+                (self.rrect_outline_instance_vbo, "2f 2f 1f 1f 2f 1u/i",
                  "i_pos", "i_size", "i_radius", "i_thickness",
                  "i_dir", "i_color"),
             ],
@@ -2791,7 +2990,7 @@ class DRAW:
                 in float i_radius;         // r_eff (gia' clampato su CPU)
                 in vec2 i_aabb_min;
                 in vec2 i_aabb_max;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
 
                 out vec2 v_pos;
@@ -2812,7 +3011,7 @@ class DRAW:
                     v_v1 = i_v1;
                     v_v2 = i_v2;
                     v_radius = i_radius;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2855,16 +3054,16 @@ class DRAW:
         self.rtri_vbo = self.ctx.buffer(quad.tobytes())
         self.rtri_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 15 float/istanza: v0(2)+v1(2)+v2(2)+radius(1)+aabb_min(2)+aabb_max(2)+color(4)
+        # 12 float-slot/istanza: v0(2)+v1(2)+v2(2)+radius(1)+aabb_min(2)+aabb_max(2)+color(1, uint32 packed)
         self.rtri_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 15 * 4,
+            reserve=self.max_rects * 12 * 4,
             dynamic=True,
         )
         self.rtri_vao = self.ctx.vertex_array(
             self.rtri_prog,
             [
                 (self.rtri_vbo, "2f", "in_corner"),
-                (self.rtri_instance_vbo, "2f 2f 2f 1f 2f 2f 4f/i",
+                (self.rtri_instance_vbo, "2f 2f 2f 1f 2f 2f 1u/i",
                  "i_v0", "i_v1", "i_v2", "i_radius",
                  "i_aabb_min", "i_aabb_max", "i_color"),
             ],
@@ -2889,7 +3088,7 @@ class DRAW:
                 in vec2 i_aabb_min;
                 in vec2 i_aabb_max;
                 in float i_thickness;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
 
                 out vec2 v_pos;
@@ -2912,7 +3111,7 @@ class DRAW:
                     v_v2 = i_v2;
                     v_radius = i_radius;
                     v_thickness = i_thickness;
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -2960,16 +3159,16 @@ class DRAW:
         self.rtri_outline_vbo = self.ctx.buffer(quad.tobytes())
         self.rtri_outline_ibo = self.ctx.buffer(indices.tobytes())
 
-        # 16 float/istanza: v0(2)+v1(2)+v2(2)+radius(1)+aabb_min(2)+aabb_max(2)+thickness(1)+color(4)
+        # 13 float-slot/istanza: v0(2)+v1(2)+v2(2)+radius(1)+aabb_min(2)+aabb_max(2)+thickness(1)+color(1, uint32 packed)
         self.rtri_outline_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 16 * 4,
+            reserve=self.max_rects * 13 * 4,
             dynamic=True,
         )
         self.rtri_outline_vao = self.ctx.vertex_array(
             self.rtri_outline_prog,
             [
                 (self.rtri_outline_vbo, "2f", "in_corner"),
-                (self.rtri_outline_instance_vbo, "2f 2f 2f 1f 2f 2f 1f 4f/i",
+                (self.rtri_outline_instance_vbo, "2f 2f 2f 1f 2f 2f 1f 1u/i",
                  "i_v0", "i_v1", "i_v2", "i_radius",
                  "i_aabb_min", "i_aabb_max",
                  "i_thickness", "i_color"),
@@ -2986,7 +3185,7 @@ class DRAW:
                 in vec2 i_v1;
                 in vec2 i_v2;
                 in vec2 i_v3;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
                 out vec4 v_color;
 
@@ -3000,7 +3199,7 @@ class DRAW:
                     vec2 norm = pos / u_resolution * 2.0 - 1.0;
                     norm.y = -norm.y;
                     gl_Position = vec4(norm, 0.0, 1.0);
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                 }
             """,
             fragment_shader="""
@@ -3013,16 +3212,16 @@ class DRAW:
             """
         )
 
-        # Buffer istanze persistente (10 float per istanza)
+        # Buffer istanze persistente (7 float-slot per istanza: color packato in 1 uint32)
         self.tri_inst_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 10 * 4,
+            reserve=self.max_rects * 7 * 4,
             dynamic=True
         )
 
         self.tri_inst_vao = self.ctx.vertex_array(
             self.tri_inst_prog,
             [
-                (self.tri_inst_instance_vbo, "2f 2f 2f 4f/i",
+                (self.tri_inst_instance_vbo, "2f 2f 2f 1u/i",
                 "i_v1", "i_v2", "i_v3", "i_color")
             ]
         )
@@ -3039,7 +3238,7 @@ class DRAW:
                 in vec2 i_p1;
                 in vec2 i_p2;
                 in float i_thickness;
-                in vec4 i_color;
+                in uint i_color;      // RGBA8 packed (R=bits0-7 G=8-15 B=16-23 A=24-31)
                 uniform vec2 u_resolution;
                 out vec4 v_color;
                 out float v_edge;      // FIX AA: -1..+1 sull'asse trasversale
@@ -3061,7 +3260,7 @@ class DRAW:
                     vec2 norm = pos / u_resolution * 2.0 - 1.0;
                     norm.y = -norm.y;
                     gl_Position = vec4(norm, 0.0, 1.0);
-                    v_color = i_color / 255.0;
+                    v_color = vec4(float(i_color & 0xFFu), float((i_color >> 8u) & 0xFFu), float((i_color >> 16u) & 0xFFu), float((i_color >> 24u) & 0xFFu)) / 255.0;
                     v_edge = in_corner.y;                 // -1..+1
                     v_halfpx = 1.0 / max(half_t, 0.5);    // pixel size in unita' v_edge
                 }
@@ -3090,7 +3289,7 @@ class DRAW:
         self.line_inst_ibo = self.ctx.buffer(indices.tobytes())
 
         self.line_inst_instance_vbo = self.ctx.buffer(
-            reserve=self.max_rects * 9 * 4,
+            reserve=self.max_rects * 6 * 4,
             dynamic=True
         )
 
@@ -3098,7 +3297,7 @@ class DRAW:
             self.line_inst_prog,
             [
                 (self.line_inst_vbo, "2f", "in_corner"),
-                (self.line_inst_instance_vbo, "2f 2f 1f 4f/i",
+                (self.line_inst_instance_vbo, "2f 2f 1f 1u/i",
                 "i_p1", "i_p2", "i_thickness", "i_color"),
             ],
             index_buffer=self.line_inst_ibo
@@ -3151,20 +3350,20 @@ class DRAW:
         # ------------------------------------------------------------------ #
         self.max_rects = max_elements
 
-        self.rect_inst_data = np.empty((self.max_rects, 10), dtype='f4')
-        self.line_inst_data = np.empty((self.max_rects, 9), dtype='f4')
-        self.tri_inst_data  = np.empty((self.max_rects, 10), dtype='f4')
-        self.ellipse_instance_data = np.empty((self.max_rects, 10), dtype='f4')
+        self.rect_inst_data = np.empty((self.max_rects, 7), dtype='f4')
+        self.line_inst_data = np.empty((self.max_rects, 6), dtype='f4')
+        self.tri_inst_data  = np.empty((self.max_rects, 7), dtype='f4')
+        self.ellipse_instance_data = np.empty((self.max_rects, 7), dtype='f4')
         self.sprite_inst_data = np.empty((self.max_rects, 11), dtype='f4')
         # Buffer instance CPU per le versioni *Outline* Batch (stesso principio
-        # zero-alloc-a-runtime dei buffer sopra): 11 float/istanza.
-        self.ellipse_outline_instance_data = np.empty((self.max_rects, 11), dtype='f4')
-        self.rect_outline_instance_data = np.empty((self.max_rects, 11), dtype='f4')
+        # zero-alloc-a-runtime dei buffer sopra).
+        self.ellipse_outline_instance_data = np.empty((self.max_rects, 8), dtype='f4')
+        self.rect_outline_instance_data = np.empty((self.max_rects, 8), dtype='f4')
         # Buffer instance CPU per le versioni Rounded* Batch.
-        self.rrect_instance_data = np.empty((self.max_rects, 11), dtype='f4')
-        self.rrect_outline_instance_data = np.empty((self.max_rects, 12), dtype='f4')
-        self.rtri_instance_data = np.empty((self.max_rects, 15), dtype='f4')
-        self.rtri_outline_instance_data = np.empty((self.max_rects, 16), dtype='f4')
+        self.rrect_instance_data = np.empty((self.max_rects, 8), dtype='f4')
+        self.rrect_outline_instance_data = np.empty((self.max_rects, 9), dtype='f4')
+        self.rtri_instance_data = np.empty((self.max_rects, 12), dtype='f4')
+        self.rtri_outline_instance_data = np.empty((self.max_rects, 13), dtype='f4')
 
         # Buffer CPU: (N, 4 vertici, 6 float: x,y,r,g,b,a)
         self._np_batch_buffer = np.empty((self.max_rects, 4, 6), dtype='f4')
@@ -3324,14 +3523,22 @@ class DRAW:
         cos_arr = np.cos(rot_rad).astype('f4')
         sin_arr = np.sin(rot_rad).astype('f4')
 
-        # L'alpha (colonna 9 nell'input) viene clampato a [0,255].
+        # L'alpha (colonna 9 nell'input) viene clampato a [0,255]. DrawSpritesBatch
+        # non espone un tint RGB (le sprite sono texture piena-risoluzione), quindi
+        # il colore packato è sempre bianco con alpha variabile.
         alpha_arr = np.clip(data[:, 9], 0.0, 255.0).astype('f4')
+        white = np.empty((n, 4), dtype='f4')
+        white[:, 0] = 255.0
+        white[:, 1] = 255.0
+        white[:, 2] = 255.0
+        white[:, 3] = alpha_arr
+        color_bits = _pack_rgba_u32_as_f4(white)
 
         # FIX 3: u_resolution gestito da SetResolution, non serve per-chiamata.
         self.atlas.tex.use(location=0)
         self.sprite_inst_prog["u_tex"].value = 0
 
-        # Layout VBO: pos(2)+size(2)+dir(2)+uv(4)+alpha(1) = 11 float
+        # Layout VBO: pos(2)+size(2)+dir(2)+uv(4)+color(1, uint32 packed) = 11 float-slot
         i = 0
         while i < n:
             chunk = min(self.max_rects, n - i)
@@ -3342,7 +3549,7 @@ class DRAW:
             inst[:, 4]   = cos_arr[sl]      # cos(rot)
             inst[:, 5]   = sin_arr[sl]      # sin(rot)
             inst[:, 6:10] = data[sl, 5:9]  # uv u0,v0,u1,v1
-            inst[:, 10]  = alpha_arr[sl]    # alpha
+            inst[:, 10]  = color_bits[sl]   # color (uint32 packed, letto come i_color)
 
             self.sprite_inst_instance_vbo.orphan(); self.sprite_inst_instance_vbo.write(memoryview(inst))
             self.sprite_inst_vao.render(instances=chunk)
@@ -3356,7 +3563,7 @@ class DRAW:
             return
         self.fonts = FontManager()
         self._glyphs = _GlyphAtlas(self, self.fonts)
-        self._text_batch_buf = np.empty((4096, 14), dtype=np.float32)
+        self._text_batch_buf = np.empty((4096, 11), dtype=np.float32)
         # PERF FIX 13: buffer di layout preallocati. In precedenza
         # _layout_string allocava 5 array NumPy per ogni chiamata (=> per
         # ogni DrawText, cioe' potenzialmente ogni frame per FPS counter/UI).
@@ -3432,6 +3639,26 @@ class DRAW:
             return None
         return gx[:idx], gy[:idx], gw[:idx], gh[:idx], guv[:idx]
 
+    def MeasureText(self, text, font="arial", size=24):
+        """Ritorna (width, height) del bounding box del testo, usando lo
+        stesso layout di DrawText/CollidePointText. Utile per centrare il
+        testo anche in orizzontale (width), non solo in verticale.
+
+        reuse=False: alloca buffer freschi invece di riusare quelli di
+        DrawText, cosi' una misurazione non sporca lo stato interno usato
+        da un'eventuale DrawText chiamata subito prima/dopo.
+        """
+        self._ensure_text_system()
+        if not text:
+            return 0.0, 0.0
+        laid = self._layout_string(str(text), font, int(size), reuse=False)
+        if laid is None:
+            return 0.0, 0.0
+        gx, gy, gw, gh, _guv = laid
+        min_x = float(gx.min()); max_x = float((gx + gw).max())
+        min_y = float(gy.min()); max_y = float((gy + gh).max())
+        return max_x - min_x, max_y - min_y
+
     def DrawText(self, text, x, y,
                  font="arial", size=24,
                  color=(255, 255, 255, 255), alpha=255, rotation=0.0):
@@ -3470,20 +3697,30 @@ class DRAW:
         n = gx.shape[0]
         buf = self._text_batch_buf
         if buf.shape[0] < n:
-            self._text_batch_buf = buf = np.empty((n, 14), dtype=np.float32)
+            self._text_batch_buf = buf = np.empty((n, 11), dtype=np.float32)
 
-        # pos world = origin + rotate(local)
-        buf[:n, 0] = x + gx * cos_r - gy * sin_r
-        buf[:n, 1] = y + gx * sin_r + gy * cos_r
+        # BUG FIX (rotazione testo): stessa correzione di _numba_layout_glyphs.
+        # Lo shader aggiunge un half_size NON ruotato per centrare ogni quad
+        # (pensato per sprite/rettangoli che ruotano attorno al proprio
+        # centro fisso). Se qui si ruota solo l'angolo top-left del glifo
+        # (come faceva la vecchia riga "x + gx*cos_r - gy*sin_r"), quel
+        # half_size non ruotato dello shader introduce un disallineamento
+        # crescente con l'angolo -> lettere sovrapposte/sfalsate in verticale
+        # a rotation!=0. Ruotiamo invece il CENTRO del glifo attorno
+        # all'origine e pre-sottraiamo lo stesso half_size, cosi' si
+        # cancella con quello riaggiunto dallo shader.
+        half_w = gw * 0.5
+        half_h = gh * 0.5
+        cx = gx + half_w
+        cy = gy + half_h
+        buf[:n, 0] = x + (cx * cos_r - cy * sin_r) - half_w
+        buf[:n, 1] = y + (cx * sin_r + cy * cos_r) - half_h
         buf[:n, 2] = gw
         buf[:n, 3] = gh
         buf[:n, 4] = cos_r
         buf[:n, 5] = sin_r
         buf[:n, 6:10] = guv
-        buf[:n, 10] = col_r
-        buf[:n, 11] = col_g
-        buf[:n, 12] = col_b
-        buf[:n, 13] = col_a
+        buf[:n, 10] = _pack_rgba_u32_scalar_as_f4(col_r, col_g, col_b, col_a)
 
         self.sprite_inst_instance_vbo.orphan(); self.sprite_inst_instance_vbo.write(memoryview(buf[:n]))
         self.sprite_inst_vao.render(instances=n)
@@ -3521,30 +3758,29 @@ class DRAW:
             # faceva prima; ora DrawText e DrawTextBatch condividono la
             # stessa primitiva trigonometrica.
             cos_r, sin_r = self._cos_sin_deg(float(rotation))
+            color_bits = np.float32(
+                _pack_rgba_u32_scalar_as_f4(col_r, col_g, col_b, col_a)
+            )
             chunks.append((gx, gy, gw, gh, guv,
                            float(x), float(y),
                            np.float32(cos_r),
                            np.float32(sin_r),
-                           np.float32(col_r),
-                           np.float32(col_g),
-                           np.float32(col_b),
-                           np.float32(col_a)))
+                           color_bits))
 
         if not chunks:
             return
 
         total = sum(c[0].shape[0] for c in chunks)
         if self._text_batch_buf.shape[0] < total:
-            self._text_batch_buf = np.empty((total, 14), dtype=np.float32)
+            self._text_batch_buf = np.empty((total, 11), dtype=np.float32)
         out = self._text_batch_buf[:total]
 
         offset = 0
-        for (gx, gy, gw, gh, guv, ox, oy, cos_r, sin_r,
-             col_r, col_g, col_b, col_a) in chunks:
+        for (gx, gy, gw, gh, guv, ox, oy, cos_r, sin_r, color_bits) in chunks:
             n = gx.shape[0]
             _numba_layout_glyphs(gx, gy, gw, gh, guv,
                                  ox, oy, cos_r, sin_r,
-                                 col_r, col_g, col_b, col_a,
+                                 color_bits,
                                  out[offset:offset + n])
             offset += n
 
@@ -4201,6 +4437,7 @@ class DRAW:
         self._check_finite_array(size, "sizes")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
         rot = np.asarray(rotation, dtype='f4').reshape(-1)
         if rot.size == 1:
             rot = np.full(n, rot[0], dtype='f4')
@@ -4225,7 +4462,7 @@ class DRAW:
             _numba_pack_rect_instances(
                 pos[i:i+chunk], size[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst
+                color_bits[i:i+chunk], inst
             )
             self.rect_inst_instance_vbo.orphan(); self.rect_inst_instance_vbo.write(memoryview(inst))
             self.rect_inst_vao.render(instances=chunk)
@@ -4253,6 +4490,7 @@ class DRAW:
         self._check_finite_array(size, "sizes")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
         rot = np.asarray(rotation, dtype='f4').reshape(-1)
         if rot.size == 1:
             rot = np.full(n, rot[0], dtype='f4')
@@ -4279,7 +4517,7 @@ class DRAW:
             _numba_pack_rect_outline_instances(
                 pos[i:i+chunk], size[i:i+chunk], thick[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst
+                color_bits[i:i+chunk], inst
             )
             self.rect_outline_instance_vbo.orphan(); self.rect_outline_instance_vbo.write(memoryview(inst))
             self.rect_outline_vao.render(instances=chunk)
@@ -4310,6 +4548,7 @@ class DRAW:
         self._check_finite_array(size, "sizes")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
         rot = np.asarray(rotation, dtype='f4').reshape(-1)
         if rot.size == 1:
             rot = np.full(n, rot[0], dtype='f4')
@@ -4336,7 +4575,7 @@ class DRAW:
             _numba_pack_rrect_instances(
                 pos[i:i+chunk], size[i:i+chunk], rad[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst,
+                color_bits[i:i+chunk], inst,
             )
             self.rrect_instance_vbo.orphan(); self.rrect_instance_vbo.write(memoryview(inst))
             self.rrect_vao.render(instances=chunk)
@@ -4368,7 +4607,7 @@ class DRAW:
         row[2] = w;  row[3] = h
         row[4] = radius
         row[5] = cs; row[6] = sn
-        row[7] = r;  row[8] = g; row[9] = b; row[10] = a
+        row[7] = _pack_rgba_u32_scalar_as_f4(r, g, b, a)
         self.rrect_count += 1
 
     def DrawRoundedRectsOutlineBatch(self, positions, sizes, radius, colors,
@@ -4395,6 +4634,7 @@ class DRAW:
         self._check_finite_array(size, "sizes")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
         rot = np.asarray(rotation, dtype='f4').reshape(-1)
         if rot.size == 1:
             rot = np.full(n, rot[0], dtype='f4')
@@ -4431,7 +4671,7 @@ class DRAW:
                 pos[i:i+chunk], size[i:i+chunk], rad[i:i+chunk],
                 thick[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst,
+                color_bits[i:i+chunk], inst,
             )
             self.rrect_outline_instance_vbo.orphan(); self.rrect_outline_instance_vbo.write(memoryview(inst))
             self.rrect_outline_vao.render(instances=chunk)
@@ -4465,7 +4705,7 @@ class DRAW:
         row[4] = radius
         row[5] = thickness
         row[6] = cs; row[7] = sn
-        row[8] = r;  row[9] = g; row[10] = b; row[11] = a
+        row[8] = _pack_rgba_u32_scalar_as_f4(r, g, b, a)
         self.rrect_outline_count += 1
 
     def DrawLinesBatch(self, x1, y1, x2, y2, colors, thickness=1.0, alpha=255, rotation=0.0):
@@ -4523,6 +4763,7 @@ class DRAW:
         self._check_finite_array(thick, "thickness")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         # PERF FIX 18: niente np.column_stack (2 allocazioni (N,2) per
         # chiamata anche con input gia' f4). Il nuovo kernel legge da 4
@@ -4534,7 +4775,7 @@ class DRAW:
             _numba_pack_line_instances_xy(
                 x1[i:i+chunk], y1[i:i+chunk],
                 x2[i:i+chunk], y2[i:i+chunk],
-                thick[i:i+chunk], rgba[i:i+chunk], inst
+                thick[i:i+chunk], color_bits[i:i+chunk], inst
             )
             self.line_inst_instance_vbo.orphan(); self.line_inst_instance_vbo.write(memoryview(inst))
             self.line_inst_vao.render(instances=chunk)
@@ -4562,6 +4803,7 @@ class DRAW:
 
         self._check_finite_array(verts, "vertices")
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         # PERF FIX 14: gli slice verts[:, 0, :] su un (N,3,2) NON sono
         # contigui in memoria (stride non unitari). Prima np.ascontiguousarray
@@ -4580,7 +4822,7 @@ class DRAW:
                 v0[i:i+chunk],
                 v1[i:i+chunk],
                 v2[i:i+chunk],
-                rgba[i:i+chunk], inst
+                color_bits[i:i+chunk], inst
             )
             self.tri_inst_instance_vbo.orphan(); self.tri_inst_instance_vbo.write(memoryview(inst))
             self.tri_inst_vao.render(vertices=3, instances=chunk)
@@ -4614,6 +4856,7 @@ class DRAW:
         self._check_finite_array(verts, "vertices")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
         rgba3 = np.repeat(rgba, 3, axis=0)
 
         thick = np.asarray(thickness, dtype='f4').reshape(-1)
@@ -4677,6 +4920,7 @@ class DRAW:
         self._check_finite_array(verts, "vertices")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         rad = np.asarray(radius, dtype='f4').reshape(-1)
         if rad.size == 1:
@@ -4697,7 +4941,7 @@ class DRAW:
             inst = self.rtri_instance_data[:chunk]
             _numba_pack_rtri_instances(
                 v0[i:i+chunk], v1[i:i+chunk], v2[i:i+chunk],
-                rad[i:i+chunk], rgba[i:i+chunk], inst,
+                rad[i:i+chunk], color_bits[i:i+chunk], inst,
             )
             self.rtri_instance_vbo.orphan(); self.rtri_instance_vbo.write(memoryview(inst))
             self.rtri_vao.render(instances=chunk)
@@ -4745,7 +4989,7 @@ class DRAW:
         row[6]  = r_eff
         row[7]  = mnx; row[8]  = mny
         row[9]  = mxx; row[10] = mxy
-        row[11] = r; row[12] = g; row[13] = b; row[14] = a
+        row[11] = _pack_rgba_u32_scalar_as_f4(r, g, b, a)
         self.rtri_count += 1
 
     def DrawRoundedTrianglesOutlineBatch(self, vertices, radius, colors,
@@ -4773,6 +5017,7 @@ class DRAW:
         self._check_finite_array(verts, "vertices")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         rad = np.asarray(radius, dtype='f4').reshape(-1)
         if rad.size == 1:
@@ -4803,7 +5048,7 @@ class DRAW:
             _numba_pack_rtri_outline_instances(
                 v0[i:i+chunk], v1[i:i+chunk], v2[i:i+chunk],
                 rad[i:i+chunk], thick[i:i+chunk],
-                rgba[i:i+chunk], inst,
+                color_bits[i:i+chunk], inst,
             )
             self.rtri_outline_instance_vbo.orphan(); self.rtri_outline_instance_vbo.write(memoryview(inst))
             self.rtri_outline_vao.render(instances=chunk)
@@ -4850,28 +5095,18 @@ class DRAW:
         row[7]  = mnx; row[8]  = mny
         row[9]  = mxx; row[10] = mxy
         row[11] = thickness
-        row[12] = r; row[13] = g; row[14] = b; row[15] = a
+        row[12] = _pack_rgba_u32_scalar_as_f4(r, g, b, a)
         self.rtri_outline_count += 1
 
-    def DrawEllipsesBatch(self, centers, radii, colors, segments=None, alpha=255, rotation=0.0):
+    def DrawEllipsesBatch(self, centers, radii, colors, alpha=255, rotation=0.0):
         """
-        NOTA (BUG 11): questo path usa il path GPU instanced (SDF nel
-        fragment shader), che disegna un'ellisse matematicamente esatta e
-        NON usa una mesh poligonale: il parametro `segments`, a differenza
-        di DrawEllipse/DrawCircle (path CPU), non ha alcun effetto qui.
-        Viene mantenuto solo per compatibilità di firma con le funzioni
-        CPU equivalenti; se viene passato esplicitamente, emettiamo un
-        warning per evitare di confondere chi si aspetta lo stesso
-        comportamento del path CPU.
+        Path GPU instanced (SDF nel fragment shader): disegna un'ellisse
+        matematicamente esatta, NON una mesh poligonale — a differenza di
+        DrawEllipse/DrawCircle (path CPU) non esiste alcun concetto di
+        `segments` qui, quindi il parametro non e' esposto (rimosso: prima
+        veniva accettato solo per compatibilita' di firma e ignorato con un
+        warning, il che era piu' fonte di confusione che di comodita').
         """
-        if segments is not None:
-            warnings.warn(
-                "DrawEllipsesBatch: 'segments' is ignored — the GPU instanced "
-                "ellipse path renders an exact ellipse via SDF, not a polygon. "
-                "Use DrawEllipse()/DrawCircle() if you need an explicit segment count.",
-                stacklevel=2
-            )
-
         self._flush_pending_draws()
         if self.tex_rect_count > 0:
             self.RefreshTextures()
@@ -4886,6 +5121,7 @@ class DRAW:
         self._check_finite_array(c, "centers")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         rad = np.asarray(radii, dtype='f4')
         if rad.ndim == 0:
@@ -4929,14 +5165,14 @@ class DRAW:
             _numba_pack_ellipse_instances(
                 c[i:i+chunk], rad[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst
+                color_bits[i:i+chunk], inst
             )
             self.ellipse_instance_vbo.orphan(); self.ellipse_instance_vbo.write(memoryview(inst))
             self.ellipse_vao.render(mode=moderngl.TRIANGLES, instances=chunk)
             i += chunk
 
     def DrawCirclesBatch(self, centers, radius, colors=(255,255,255,255),
-                         segments=None, alpha=255):
+                         alpha=255):
         """Alias di DrawEllipsesBatch con rx == ry — simmetrico a
         DrawCircleOutlineBatch. Stessa pipeline instanced di DrawEllipsesBatch,
         stessa fascia di prestazioni."""
@@ -4951,8 +5187,7 @@ class DRAW:
             radii = np.column_stack((r, r)).astype('f4', copy=False)
         else:
             raise ValueError("radius must be scalar or array of length n")
-        self.DrawEllipsesBatch(centers, radii, colors,
-                               segments=segments, alpha=alpha, rotation=0.0)
+        self.DrawEllipsesBatch(centers, radii, colors, alpha=alpha, rotation=0.0)
 
     def DrawBezierCurvesBatch(self, p0s, p1s, p2s, thickness=2.0,
                               colors=(255,255,255,255), segments=None,
@@ -5046,6 +5281,7 @@ class DRAW:
         self._check_finite_array(c, "centers")
 
         rgba = self._prepare_rgba_batch(colors, alpha, n)
+        color_bits = _pack_rgba_u32_as_f4(rgba)
 
         rad = np.asarray(radii, dtype='f4')
         if rad.ndim == 0:
@@ -5096,7 +5332,7 @@ class DRAW:
             _numba_pack_ellipse_outline_instances(
                 c[i:i+chunk], rad[i:i+chunk], thick[i:i+chunk],
                 cos_arr[i:i+chunk], sin_arr[i:i+chunk],
-                rgba[i:i+chunk], inst
+                color_bits[i:i+chunk], inst
             )
             self.ellipse_outline_instance_vbo.orphan(); self.ellipse_outline_instance_vbo.write(memoryview(inst))
             self.ellipse_outline_vao.render(mode=moderngl.TRIANGLES, instances=chunk)
@@ -5556,6 +5792,8 @@ class DRAW:
         dx = x2-x1; dy = y2-y1
         irx2 = 1.0/(rx*rx); iry2 = 1.0/(ry*ry)
         a = dx*dx*irx2 + dy*dy*iry2
+        if a <= self._EPSILON:
+            return False
         b = 2.0*(x1*dx*irx2 + y1*dy*iry2)
         c = x1*x1*irx2 + y1*y1*iry2 - 1.0
         if c <= 0.0: return True
@@ -6092,6 +6330,86 @@ class DRAW:
         sub_idx = idx[valid]
         out[sub_idx] = alpha_ch[row[valid], col[valid]] >= alpha_threshold
         return out
+
+    def CollidePointRoundedRect(self, px, py, x, y, w, h, radius, rotation=0.0):
+        """Point-vs-RoundedRect diretto, senza creare oggetti temporanei."""
+        return _point_in_rounded_rect_direct(px, py, x, y, w, h, radius, rotation)
+
+    def CollidePointRoundedTriangle(self, px, py, x1, y1, x2, y2, x3, y3,
+                                    radius, rotation=0.0):
+        """Point-vs-RoundedTriangle coerente con DrawRoundedTriangle."""
+        return _point_in_rounded_triangle_direct(px, py, x1, y1, x2, y2, x3, y3,
+                                                 radius, rotation)
+
+    def CollidePointPolygon(self, px, py, points):
+        """Point-vs-Polygon diretto; funziona anche con poligoni concavi."""
+        return _point_in_polygon(px, py, points)
+
+    def CollidePointText(self, px, py, text, x, y, font="arial", size=24, rotation=0.0):
+        """Point-vs-Text usando lo stesso layout di DrawText."""
+        self._ensure_text_system()
+        laid = self._layout_string(str(text), font, int(size), reuse=True)
+        if laid is None:
+            return False
+        gx, gy, gw, gh, _guv = laid
+        min_x = float(gx.min()); max_x = float((gx + gw).max())
+        min_y = float(gy.min()); max_y = float((gy + gh).max())
+        if rotation != 0.0:
+            ang = -float(rotation) * _DEG2RAD_CONST
+            cs = math.cos(ang); sn = math.sin(ang)
+            dx = px - x; dy = py - y
+            lx = dx * cs - dy * sn
+            ly = dx * sn + dy * cs
+        else:
+            lx = px - x; ly = py - y
+        return min_x <= lx <= max_x and min_y <= ly <= max_y
+
+    def CollidePointRoundedRectBatch(self, px_arr, py_arr, x_arr, y_arr, w_arr, h_arr,
+                                     radius_arr, rotation_arr=0.0):
+        px = np.asarray(px_arr, dtype='f4'); py = np.asarray(py_arr, dtype='f4')
+        x = np.asarray(x_arr, dtype='f4'); y = np.asarray(y_arr, dtype='f4')
+        w = np.asarray(w_arr, dtype='f4'); h = np.asarray(h_arr, dtype='f4')
+        r = np.asarray(radius_arr, dtype='f4')
+        rot = np.asarray(rotation_arr, dtype='f4')
+        cx = x + w * 0.5; cy = y + h * 0.5
+        dx = px - cx; dy = py - cy
+        if np.any(rot != 0.0):
+            ang = -rot * np.float32(_DEG2RAD_CONST)
+            cs = np.cos(ang); sn = np.sin(ang)
+            lx = dx * cs - dy * sn
+            ly = dx * sn + dy * cs
+        else:
+            lx, ly = dx, dy
+        hw = w * 0.5; hh = h * 0.5
+        rr = np.minimum(np.maximum(r, 0.0), np.minimum(hw, hh))
+        qx = np.abs(lx) - hw + rr
+        qy = np.abs(ly) - hh + rr
+        d = np.minimum(np.maximum(qx, qy), 0.0) + np.hypot(np.maximum(qx, 0.0), np.maximum(qy, 0.0)) - rr
+        return d <= 0.0
+
+    def CollidePointRoundedTriangleBatch(self, px_arr, py_arr, vertices, radius):
+        px = np.asarray(px_arr, dtype='f8')
+        py = np.asarray(py_arr, dtype='f8')
+        verts = np.asarray(vertices, dtype='f8')
+        if verts.ndim == 2:
+            n = verts.shape[0] // 3
+            verts = verts.reshape(n, 3, 2)
+        else:
+            n = verts.shape[0]
+        px = np.broadcast_to(px, (n,))
+        py = np.broadcast_to(py, (n,))
+        rad = np.asarray(radius, dtype='f8').reshape(-1)
+        if rad.size == 1:
+            rad = np.full(n, rad[0], dtype='f8')
+        out = np.zeros(n, dtype=bool)
+        for i in range(n):
+            (x1, y1), (x2, y2), (x3, y3) = verts[i]
+            out[i] = _point_in_rounded_triangle_direct(float(px[i]), float(py[i]),
+                                                       float(x1), float(y1),
+                                                       float(x2), float(y2),
+                                                       float(x3), float(y3),
+                                                       float(rad[i]), 0.0)
+        return out
     # ================================================================
     # PE_COLLISION — API pubblica (integrata da PE_COLLISION.py)
     # ================================================================
@@ -6172,6 +6490,250 @@ class DRAW:
         self._ensure_collision_state()
         return Point(self._mouse_x, self._mouse_y)
 
+    def _mouse_xy(self):
+        self._ensure_collision_state()
+        return self._mouse_x, self._mouse_y
+
+    def _direct_shape_hit(self, px, py, *shape_args):
+        """Hit-test punto->forma senza creare Point/Rect/Circle temporanei.
+
+        Forme dirette supportate:
+            MouseClicked(x, y, w, h)                         # rect default
+            MouseClicked((x, y, w, h))                       # rect tuple/list
+            MouseClicked("circle", cx, cy, r)
+            MouseClicked("ellipse", cx, cy, rx, ry, rotation=0)
+            MouseClicked("line", x1, y1, x2, y2, thickness=1, rotation=0)
+            MouseClicked("triangle", x1, y1, x2, y2, x3, y3)
+            MouseClicked("rounded_rect", x, y, w, h, radius, rotation=0)
+            MouseClicked("rounded_triangle", x1, y1, x2, y2, x3, y3, radius, rotation=0)
+            MouseClicked("polygon", [(x, y), ...])
+            MouseClicked("texture", name, x, y, w=None, h=None, rotation=0, flip_x=False, flip_y=False, alpha_threshold=1)
+            MouseClicked("text", text, x, y, font="arial", size=24, rotation=0)
+        """
+        if len(shape_args) == 1:
+            spec = shape_args[0]
+            if hasattr(spec, "_t"):
+                return _dispatch(Point(px, py), spec, self)
+            if isinstance(spec, (tuple, list)):
+                if spec and isinstance(spec[0], str):
+                    return self._direct_shape_hit(px, py, *spec)
+                if len(spec) == 2:
+                    sx, sy = spec
+                    return abs(px - sx) <= _EPS and abs(py - sy) <= _EPS
+                if len(spec) == 3:
+                    cx, cy, r = spec
+                    return self.CollidePointCircle(px, py, cx, cy, r)
+                if len(spec) == 4:
+                    x, y, w, h = spec
+                    return self.CollidePointRect(px, py, x, y, w, h)
+                if len(spec) == 5:
+                    x, y, w, h, rotation = spec
+                    return self.CollidePointRotatedRect(px, py, x, y, w, h, rotation)
+                if len(spec) == 6:
+                    x1, y1, x2, y2, x3, y3 = spec
+                    return self.CollidePointTriangle(px, py, x1, y1, x2, y2, x3, y3)
+            raise TypeError("Forma non valida: usa coordinate dirette, una tupla/lista, oppure ('tipo', ...).")
+
+        if not shape_args:
+            raise TypeError("Manca la forma da testare.")
+
+        first = shape_args[0]
+        if isinstance(first, str):
+            kind = first.lower().replace("-", "_").replace(" ", "")
+            args = shape_args[1:]
+            if kind in ("rect", "rectangle", "rettangolo"):
+                if len(args) == 4:
+                    return self.CollidePointRect(px, py, *args)
+                if len(args) == 5:
+                    return self.CollidePointRotatedRect(px, py, *args)
+            elif kind in ("rotrect", "rotatedrect", "rotated_rect"):
+                if len(args) == 5:
+                    return self.CollidePointRotatedRect(px, py, *args)
+            elif kind in ("circle", "cerchio"):
+                if len(args) == 3:
+                    return self.CollidePointCircle(px, py, *args)
+            elif kind in ("ellipse", "ellisse"):
+                if len(args) == 4:
+                    return self.CollidePointEllipse(px, py, *args)
+                if len(args) == 5:
+                    return self.CollidePointEllipse(px, py, *args)
+            elif kind in ("line", "linea"):
+                if len(args) == 4:
+                    return self.PointInLine(px, py, *args)
+                if len(args) == 5:
+                    x1, y1, x2, y2, thickness = args
+                    return self.PointInLine(px, py, x1, y1, x2, y2, thickness=thickness)
+                if len(args) == 6:
+                    x1, y1, x2, y2, thickness, rotation = args
+                    return self.PointInLine(px, py, x1, y1, x2, y2, thickness=thickness, rotation=rotation)
+            elif kind in ("triangle", "triangolo"):
+                if len(args) == 6:
+                    return self.CollidePointTriangle(px, py, *args)
+            elif kind in ("roundedrect", "rounded_rect", "rrect", "rectrounded"):
+                if len(args) == 5:
+                    return self.CollidePointRoundedRect(px, py, *args)
+                if len(args) == 6:
+                    return self.CollidePointRoundedRect(px, py, *args)
+            elif kind in ("roundedtriangle", "rounded_triangle", "rtri"):
+                if len(args) == 7:
+                    return self.CollidePointRoundedTriangle(px, py, *args)
+                if len(args) == 8:
+                    return self.CollidePointRoundedTriangle(px, py, *args)
+            elif kind in ("polygon", "poly", "poligono"):
+                if len(args) == 1:
+                    return self.CollidePointPolygon(px, py, args[0])
+            elif kind in ("texture", "sprite", "image"):
+                if 3 <= len(args) <= 9:
+                    return self.CollidePointTexture(px, py, *args)
+            elif kind in ("text", "testo"):
+                if 3 <= len(args) <= 6:
+                    return self.CollidePointText(px, py, *args)
+            raise TypeError(f"Parametri non validi per forma {first!r}.")
+
+        if len(shape_args) == 2:
+            sx, sy = shape_args
+            return abs(px - sx) <= _EPS and abs(py - sy) <= _EPS
+        if len(shape_args) == 3:
+            return self.CollidePointCircle(px, py, *shape_args)
+        if len(shape_args) == 4:
+            return self.CollidePointRect(px, py, *shape_args)
+        if len(shape_args) == 5:
+            return self.CollidePointRotatedRect(px, py, *shape_args)
+        if len(shape_args) == 6:
+            return self.CollidePointTriangle(px, py, *shape_args)
+        raise TypeError("Coordinate dirette non riconosciute: usa ('tipo', ...) per forme ambigue/avanzate.")
+
+    def _outline_direct_shape(self, *shape_args, color=(0, 255, 0, 255), thickness=2.0):
+        if len(shape_args) == 1 and hasattr(shape_args[0], "_t"):
+            _draw_shape_outline(self, shape_args[0], color, thickness)
+            return
+        if len(shape_args) == 1 and isinstance(shape_args[0], (tuple, list)):
+            spec = shape_args[0]
+            if spec and isinstance(spec[0], str):
+                self._outline_direct_shape(*spec, color=color, thickness=thickness)
+                return
+            if len(spec) == 4:
+                self.DrawRectOutline(*spec, thickness=thickness, color=color)
+                return
+        if shape_args and isinstance(shape_args[0], str):
+            kind = shape_args[0].lower().replace("-", "_").replace(" ", "")
+            args = shape_args[1:]
+            if kind in ("rect", "rectangle", "rettangolo") and len(args) in (4, 5):
+                if len(args) == 4:
+                    self.DrawRectOutline(*args, thickness=thickness, color=color)
+                else:
+                    x, y, w, h, rotation = args
+                    self.DrawRectOutline(x, y, w, h, thickness=thickness, color=color, rotation=rotation)
+            elif kind in ("circle", "cerchio") and len(args) == 3:
+                self.DrawCircleOutline(*args, thickness=thickness, color=color)
+            elif kind in ("ellipse", "ellisse") and len(args) in (4, 5):
+                if len(args) == 4:
+                    self.DrawEllipseOutline(*args, thickness=thickness, color=color)
+                else:
+                    cx, cy, rx, ry, rotation = args
+                    self.DrawEllipseOutline(cx, cy, rx, ry, thickness=thickness, color=color, rotation=rotation)
+            elif kind in ("line", "linea") and len(args) >= 4:
+                self.DrawLine(args[0], args[1], args[2], args[3], thickness=max(thickness, args[4] if len(args) >= 5 else thickness), color=color)
+            elif kind in ("triangle", "triangolo") and len(args) == 6:
+                self.DrawTriangleOutline(*args, thickness=thickness, color=color)
+            elif kind in ("roundedrect", "rounded_rect", "rrect", "rectrounded") and len(args) in (5, 6):
+                if len(args) == 5:
+                    self.DrawRoundedRectOutline(*args, thickness=thickness, color=color)
+                else:
+                    x, y, w, h, radius, rotation = args
+                    self.DrawRoundedRectOutline(x, y, w, h, radius, thickness=thickness, color=color, rotation=rotation)
+            elif kind in ("roundedtriangle", "rounded_triangle", "rtri") and len(args) in (7, 8):
+                if len(args) == 7:
+                    self.DrawRoundedTriangleOutline(*args, thickness=thickness, color=color)
+                else:
+                    x1, y1, x2, y2, x3, y3, radius, rotation = args
+                    self.DrawRoundedTriangleOutline(x1, y1, x2, y2, x3, y3, radius, thickness=thickness, color=color, rotation=rotation)
+            return
+        if len(shape_args) == 4:
+            self.DrawRectOutline(*shape_args, thickness=thickness, color=color)
+        elif len(shape_args) == 3:
+            self.DrawCircleOutline(*shape_args, thickness=thickness, color=color)
+        elif len(shape_args) == 6:
+            self.DrawTriangleOutline(*shape_args, thickness=thickness, color=color)
+
+    def _shape_from_spec(self, spec):
+        if hasattr(spec, "_t"):
+            return spec
+        if not isinstance(spec, (tuple, list)):
+            raise TypeError("CheckCollision richiede forme DRAW oppure tuple ('tipo', ...).")
+        if spec and isinstance(spec[0], str):
+            kind = spec[0].lower().replace("-", "_").replace(" ", "")
+            args = spec[1:]
+            if kind in ("rect", "rectangle", "rettangolo") and len(args) == 4:
+                return Rect(*args)
+            if kind in ("rotrect", "rotatedrect", "rotated_rect") and len(args) == 5:
+                return RotRect(*args)
+            if kind in ("circle", "cerchio") and len(args) == 3:
+                return Circle(*args)
+            if kind in ("ellipse", "ellisse") and len(args) in (4, 5):
+                return Ellipse(*args)
+            if kind in ("line", "linea") and len(args) in (4, 5):
+                return Line(*args)
+            if kind in ("triangle", "triangolo") and len(args) == 6:
+                return Triangle(*args)
+            if kind in ("roundedrect", "rounded_rect", "rrect", "rectrounded") and len(args) == 5:
+                return RoundedRect(*args)
+            if kind in ("polygon", "poly", "poligono") and len(args) == 1:
+                return Polygon(args[0])
+            if kind in ("texture", "sprite", "image") and 4 <= len(args) <= 12:
+                return TextureCollider(*args)
+            raise TypeError(f"Specifica forma non valida: {spec!r}")
+        if len(spec) == 2:
+            return Point(*spec)
+        if len(spec) == 3:
+            return Circle(*spec)
+        if len(spec) == 4:
+            return Rect(*spec)
+        if len(spec) == 5:
+            return RotRect(*spec)
+        if len(spec) == 6:
+            return Triangle(*spec)
+        raise TypeError(f"Specifica forma non riconosciuta: {spec!r}")
+
+    def _mouse_args(self, first, extra, default_button, show, color, thickness):
+        button = default_button
+        legacy_show = show
+        legacy_color = color
+        legacy_thickness = thickness
+        shape_args = (first, *extra)
+        if extra and (hasattr(first, "_t") or isinstance(first, (tuple, list))):
+            rest = list(extra)
+            if rest and isinstance(rest[0], int):
+                button = rest.pop(0)
+            if rest and isinstance(rest[0], bool):
+                legacy_show = rest.pop(0)
+            if rest and isinstance(rest[0], (tuple, list)):
+                legacy_color = rest.pop(0)
+            if rest and isinstance(rest[0], (int, float)):
+                legacy_thickness = rest.pop(0)
+            # Compatibilità con la vecchia firma:
+            # MouseClicked(shape, button, show, color, thickness).
+            # Quando la forma è già un oggetto/tupla, gli argomenti extra non
+            # sono coordinate della forma ma vecchie opzioni posizionali.
+            shape_args = (first,)
+        return shape_args, button, legacy_show, legacy_color, legacy_thickness
+
+    def _shape_only_args(self, first, extra, show, color, thickness):
+        legacy_show = show
+        legacy_color = color
+        legacy_thickness = thickness
+        shape_args = (first, *extra)
+        if extra and (hasattr(first, "_t") or isinstance(first, (tuple, list))):
+            rest = list(extra)
+            if rest and isinstance(rest[0], bool):
+                legacy_show = rest.pop(0)
+            if rest and isinstance(rest[0], (tuple, list)):
+                legacy_color = rest.pop(0)
+            if rest and isinstance(rest[0], (int, float)):
+                legacy_thickness = rest.pop(0)
+            shape_args = (first,)
+        return shape_args, legacy_show, legacy_color, legacy_thickness
+
     def CheckCollision(self, a, b, show=False, color=(0, 255, 0, 255),
                        thickness=2.0):
         """Rileva collisione fra due forme qualsiasi (Point, Rect, RotRect,
@@ -6183,83 +6745,562 @@ class DRAW:
             if draw.CheckCollision(player_rect, enemy_circle):
                 player.hp -= 1
         """
+        a = self._shape_from_spec(a)
+        b = self._shape_from_spec(b)
         result = _dispatch(a, b, self)
         if show:
             _draw_shape_outline(self, a, color, thickness)
             _draw_shape_outline(self, b, color, thickness)
         return result
 
-    def MouseOver(self, shape, show=False, color=(0, 255, 255, 255),
+    def MouseOver(self, shape, *shape_args, show=False, color=(0, 255, 255, 255),
                   thickness=2.0):
         """True se il cursore del mouse e' attualmente SOPRA la forma."""
-        hit = _dispatch(self._mouse_point(), shape, self)
+        px, py = self._mouse_xy()
+        args, show, color, thickness = self._shape_only_args(shape, shape_args, show, color, thickness)
+        hit = self._direct_shape_hit(px, py, *args)
         if show:
-            _draw_shape_outline(self, shape, color, thickness)
+            self._outline_direct_shape(*args, color=color, thickness=thickness)
         return hit
 
-    def MousePressed(self, shape, button=PE_MOUSE_LEFT, show=False,
+    def MousePressed(self, shape, *shape_args, button=PE_MOUSE_LEFT, show=False,
                      color=(255, 255, 0, 255), thickness=2.0):
         """True per UN SOLO frame quando `button` viene premuto MENTRE il
         mouse e' sopra `shape`. Richiede che UpdateMouseState() sia stato
         chiamato in questo frame."""
         self._ensure_collision_state()
-        hit = (button in self._mouse_buttons_pressed) and \
-              _dispatch(self._mouse_point(), shape, self)
+        args, button, show, color, thickness = self._mouse_args(shape, shape_args, button, show, color, thickness)
+        px, py = self._mouse_xy()
+        hit = (button in self._mouse_buttons_pressed) and self._direct_shape_hit(px, py, *args)
         if show:
-            _draw_shape_outline(self, shape, color, thickness)
+            self._outline_direct_shape(*args, color=color, thickness=thickness)
         return hit
 
-    def MouseReleased(self, shape, button=PE_MOUSE_LEFT, show=False,
+    def MouseReleased(self, shape, *shape_args, button=PE_MOUSE_LEFT, show=False,
                       color=(255, 128, 0, 255), thickness=2.0):
         """True per UN SOLO frame quando `button` viene rilasciato sopra
         `shape`."""
         self._ensure_collision_state()
-        hit = (button in self._mouse_buttons_released) and \
-              _dispatch(self._mouse_point(), shape, self)
+        args, button, show, color, thickness = self._mouse_args(shape, shape_args, button, show, color, thickness)
+        px, py = self._mouse_xy()
+        hit = (button in self._mouse_buttons_released) and self._direct_shape_hit(px, py, *args)
         if show:
-            _draw_shape_outline(self, shape, color, thickness)
+            self._outline_direct_shape(*args, color=color, thickness=thickness)
         return hit
 
-    def MouseClicked(self, shape, button=PE_MOUSE_LEFT, show=False,
+    def MouseClicked(self, shape, *shape_args, button=PE_MOUSE_LEFT, show=False,
                      color=(0, 255, 0, 255), thickness=2.0):
         """Alias di MouseReleased — semanticamente 'click completato sulla
         forma'."""
-        return self.MouseReleased(shape, button, show, color, thickness)
+        return self.MouseReleased(shape, *shape_args, button=button, show=show,
+                                  color=color, thickness=thickness)
 
-    def MouseHeld(self, shape, button=PE_MOUSE_LEFT, show=False,
+    def MouseHeld(self, shape, *shape_args, button=PE_MOUSE_LEFT, show=False,
                  color=(255, 0, 255, 255), thickness=2.0):
         """True FINCHE' `button` resta premuto E il mouse resta sopra
         `shape`."""
         self._ensure_collision_state()
-        hit = (button in self._mouse_buttons_down) and \
-              _dispatch(self._mouse_point(), shape, self)
+        args, button, show, color, thickness = self._mouse_args(shape, shape_args, button, show, color, thickness)
+        px, py = self._mouse_xy()
+        hit = (button in self._mouse_buttons_down) and self._direct_shape_hit(px, py, *args)
         if show:
-            _draw_shape_outline(self, shape, color, thickness)
+            self._outline_direct_shape(*args, color=color, thickness=thickness)
         return hit
 
-    def MouseDragging(self, shape, button=PE_MOUSE_LEFT, show=False,
+    def MouseDragging(self, shape, *shape_args, button=PE_MOUSE_LEFT, show=False,
                       color=(0, 128, 255, 255), thickness=2.0):
         """True mentre l'utente sta trascinando (bottone premuto + mouse in
         movimento) e il cursore e' sopra `shape`."""
         self._ensure_collision_state()
         moved = (self._mouse_x != self._mouse_prev_x) or \
                 (self._mouse_y != self._mouse_prev_y)
-        hit = moved and (button in self._mouse_buttons_down) and \
-              _dispatch(self._mouse_point(), shape, self)
+        args, button, show, color, thickness = self._mouse_args(shape, shape_args, button, show, color, thickness)
+        px, py = self._mouse_xy()
+        hit = moved and (button in self._mouse_buttons_down) and self._direct_shape_hit(px, py, *args)
         if show:
-            _draw_shape_outline(self, shape, color, thickness)
+            self._outline_direct_shape(*args, color=color, thickness=thickness)
         return hit
 
-    def MouseWheelOn(self, shape, show=False, color=(200, 200, 0, 255),
+    def MouseWheelOn(self, shape, *shape_args, show=False, color=(200, 200, 0, 255),
                      thickness=2.0):
         """Ritorna (dx, dy) della rotellina se avvenuta sopra `shape` in
         questo frame, altrimenti (0, 0). Uso: `dx, dy = draw.MouseWheelOn(btn)`."""
         self._ensure_collision_state()
-        if self._mouse_wheel_event and _dispatch(self._mouse_point(), shape, self):
+        args, show, color, thickness = self._shape_only_args(shape, shape_args, show, color, thickness)
+        px, py = self._mouse_xy()
+        if self._mouse_wheel_event and self._direct_shape_hit(px, py, *args):
             if show:
-                _draw_shape_outline(self, shape, color, thickness)
+                self._outline_direct_shape(*args, color=color, thickness=thickness)
             return self._mouse_wheel_x, self._mouse_wheel_y
         return 0.0, 0.0
+
+    # ------------------------------------------------------------------ #
+    # WRAPPER "FACILI" — versioni semplificate delle funzioni *Batch.
+    #
+    # Le funzioni *Batch (DrawRectsBatch, DrawEllipsesBatch, ecc.) vogliono
+    # array NumPy "paralleli": una lista di posizioni, una lista di
+    # dimensioni, una lista di colori... costruiti a mano dal chiamante.
+    # Comodo per prestazioni massime quando i dati sono già in NumPy, ma
+    # scomodo per scrivere in fretta.
+    #
+    # Questi wrapper fanno l'opposto: si passa UNA SOLA lista di tuple (una
+    # tupla per istanza), con GLI STESSI parametri, nello stesso ordine,
+    # delle funzioni "immediate" equivalenti (DrawRect, DrawLine,
+    # DrawEllipse, ...). Non serve importare numpy né costruire array a
+    # parte: il wrapper spacchetta le tuple in liste Python parallele e
+    # richiama la funzione *Batch già esistente, che internamente le
+    # converte in NumPy — stessa identica pipeline GPU-instanced, stessa
+    # fascia di prestazioni Batch, zero lavoro extra per chi chiama.
+    #
+    # I parametri opzionali in coda a ogni tupla possono essere omessi
+    # (vengono riempiti con gli stessi default delle funzioni immediate):
+    #
+    #     draw.DrawRects([
+    #         (10, 10, 50, 50),                              # bianco, alpha 255
+    #         (100, 10, 30, 30, (255, 0, 0, 255)),            # rosso
+    #         (200, 10, 40, 40, (0, 255, 0, 255), 128, 45.0),  # verde, alpha 128, ruotato
+    #     ])
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _pad_item(item, n_required, defaults):
+        """Completa una tupla `item` con i valori di default mancanti in
+        coda. `n_required` = numero minimo di valori posizionali che
+        l'utente DEVE fornire; `defaults` = default dei rimanenti parametri
+        opzionali, nello stesso ordine in cui compaiono nella firma."""
+        item = tuple(item)
+        if len(item) < n_required:
+            raise ValueError(
+                f"ogni elemento deve avere almeno {n_required} valori "
+                f"posizionali, ricevuti {len(item)}: {item}"
+            )
+        n_optional_given = len(item) - n_required
+        if n_optional_given > len(defaults):
+            raise ValueError(
+                "troppi valori nell'elemento (attesi al massimo "
+                f"{n_required + len(defaults)}, ricevuti {len(item)}): {item}"
+            )
+        return item + tuple(defaults[n_optional_given:])
+
+    def DrawRects(self, items):
+        """
+        Versione facile di DrawRectsBatch.
+
+        items: iterable di tuple
+            (x, y, w, h, color=(255,255,255,255), alpha=255, rotation=0.0)
+        """
+        items = list(items)
+        if not items:
+            return
+        positions, sizes, colors, alphas, rotations = [], [], [], [], []
+        for raw in items:
+            x, y, w, h, color, alpha, rotation = self._pad_item(
+                raw, 4, ((255, 255, 255, 255), 255, 0.0)
+            )
+            positions.append((x, y))
+            sizes.append((w, h))
+            colors.append(color)
+            alphas.append(alpha)
+            rotations.append(rotation)
+        self.DrawRectsBatch(positions, sizes, colors,
+                            alpha=alphas, rotation=rotations)
+
+    def DrawRectsOutline(self, items):
+        """
+        Versione facile di DrawRectsOutlineBatch.
+
+        items: iterable di tuple
+            (x, y, w, h, thickness=1.0, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        positions, sizes, thicknesses, colors, rotations, alphas = \
+            [], [], [], [], [], []
+        for raw in items:
+            x, y, w, h, thickness, color, rotation, alpha = self._pad_item(
+                raw, 4, (1.0, (255, 255, 255, 255), 0.0, 255)
+            )
+            positions.append((x, y))
+            sizes.append((w, h))
+            thicknesses.append(thickness)
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawRectsOutlineBatch(positions, sizes, colors,
+                                   thickness=thicknesses, alpha=alphas,
+                                   rotation=rotations)
+
+    def DrawRoundedRects(self, items):
+        """
+        Versione facile di DrawRoundedRectsBatch.
+
+        items: iterable di tuple
+            (x, y, w, h, radius, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        positions, sizes, radii, colors, rotations, alphas = \
+            [], [], [], [], [], []
+        for raw in items:
+            x, y, w, h, radius, color, rotation, alpha = self._pad_item(
+                raw, 5, ((255, 255, 255, 255), 0.0, 255)
+            )
+            positions.append((x, y))
+            sizes.append((w, h))
+            radii.append(radius)
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawRoundedRectsBatch(positions, sizes, radii, colors,
+                                   alpha=alphas, rotation=rotations)
+
+    def DrawRoundedRectsOutline(self, items):
+        """
+        Versione facile di DrawRoundedRectsOutlineBatch.
+
+        items: iterable di tuple
+            (x, y, w, h, radius, thickness=1.0, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        positions, sizes, radii, thicknesses, colors, rotations, alphas = \
+            [], [], [], [], [], [], []
+        for raw in items:
+            x, y, w, h, radius, thickness, color, rotation, alpha = self._pad_item(
+                raw, 5, (1.0, (255, 255, 255, 255), 0.0, 255)
+            )
+            positions.append((x, y))
+            sizes.append((w, h))
+            radii.append(radius)
+            thicknesses.append(thickness)
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawRoundedRectsOutlineBatch(positions, sizes, radii, colors,
+                                          thickness=thicknesses, alpha=alphas,
+                                          rotation=rotations)
+
+    def DrawLines(self, items):
+        """
+        Versione facile di DrawLinesBatch.
+
+        items: iterable di tuple
+            (x1, y1, x2, y2, thickness=1.0, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        x1s, y1s, x2s, y2s, thicknesses, colors, rotations, alphas = \
+            [], [], [], [], [], [], [], []
+        for raw in items:
+            x1, y1, x2, y2, thickness, color, rotation, alpha = self._pad_item(
+                raw, 4, (1.0, (255, 255, 255, 255), 0.0, 255)
+            )
+            x1s.append(x1); y1s.append(y1); x2s.append(x2); y2s.append(y2)
+            thicknesses.append(thickness)
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawLinesBatch(x1s, y1s, x2s, y2s, colors,
+                            thickness=thicknesses, alpha=alphas,
+                            rotation=rotations)
+
+    def DrawTriangles(self, items):
+        """
+        Versione facile di DrawTrianglesBatch. NOTA: DrawTrianglesBatch non
+        supporta la rotazione via GPU; se `rotation` != 0 i 3 vertici
+        vengono ruotati sulla CPU attorno al centroide (stessa formula di
+        DrawTriangle) prima di essere impacchettati nel batch.
+
+        items: iterable di tuple
+            (x1, y1, x2, y2, x3, y3, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        vertices, colors, alphas = [], [], []
+        for raw in items:
+            x1, y1, x2, y2, x3, y3, color, rotation, alpha = self._pad_item(
+                raw, 6, ((255, 255, 255, 255), 0.0, 255)
+            )
+            if rotation != 0.0:
+                cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+                cs, sn = self._cos_sin_deg(rotation)
+                dx1, dy1 = x1 - cx, y1 - cy
+                dx2, dy2 = x2 - cx, y2 - cy
+                dx3, dy3 = x3 - cx, y3 - cy
+                x1, y1 = cx + dx1*cs - dy1*sn, cy + dx1*sn + dy1*cs
+                x2, y2 = cx + dx2*cs - dy2*sn, cy + dx2*sn + dy2*cs
+                x3, y3 = cx + dx3*cs - dy3*sn, cy + dx3*sn + dy3*cs
+            vertices.append(((x1, y1), (x2, y2), (x3, y3)))
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawTrianglesBatch(vertices, colors, alpha=alphas)
+
+    def DrawTrianglesOutline(self, items):
+        """
+        Versione facile di DrawTrianglesOutlineBatch. Stessa nota sulla
+        rotazione di DrawTriangles (ruotata sulla CPU prima del batch).
+
+        items: iterable di tuple
+            (x1, y1, x2, y2, x3, y3, thickness=1.0,
+             color=(255,255,255,255), rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        vertices, thicknesses, colors, alphas = [], [], [], []
+        for raw in items:
+            x1, y1, x2, y2, x3, y3, thickness, color, rotation, alpha = \
+                self._pad_item(raw, 6, (1.0, (255, 255, 255, 255), 0.0, 255))
+            if rotation != 0.0:
+                cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+                cs, sn = self._cos_sin_deg(rotation)
+                dx1, dy1 = x1 - cx, y1 - cy
+                dx2, dy2 = x2 - cx, y2 - cy
+                dx3, dy3 = x3 - cx, y3 - cy
+                x1, y1 = cx + dx1*cs - dy1*sn, cy + dx1*sn + dy1*cs
+                x2, y2 = cx + dx2*cs - dy2*sn, cy + dx2*sn + dy2*cs
+                x3, y3 = cx + dx3*cs - dy3*sn, cy + dx3*sn + dy3*cs
+            vertices.append(((x1, y1), (x2, y2), (x3, y3)))
+            thicknesses.append(thickness)
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawTrianglesOutlineBatch(vertices, colors,
+                                       thickness=thicknesses, alpha=alphas)
+
+    def DrawRoundedTriangles(self, items):
+        """
+        Versione facile di DrawRoundedTrianglesBatch. Stessa nota sulla
+        rotazione di DrawTriangles (ruotata sulla CPU prima del batch).
+
+        items: iterable di tuple
+            (x1, y1, x2, y2, x3, y3, radius, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        vertices, radii, colors, alphas = [], [], [], []
+        for raw in items:
+            x1, y1, x2, y2, x3, y3, radius, color, rotation, alpha = \
+                self._pad_item(raw, 7, ((255, 255, 255, 255), 0.0, 255))
+            if rotation != 0.0:
+                cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+                cs, sn = self._cos_sin_deg(rotation)
+                dx1, dy1 = x1 - cx, y1 - cy
+                dx2, dy2 = x2 - cx, y2 - cy
+                dx3, dy3 = x3 - cx, y3 - cy
+                x1, y1 = cx + dx1*cs - dy1*sn, cy + dx1*sn + dy1*cs
+                x2, y2 = cx + dx2*cs - dy2*sn, cy + dx2*sn + dy2*cs
+                x3, y3 = cx + dx3*cs - dy3*sn, cy + dx3*sn + dy3*cs
+            vertices.append(((x1, y1), (x2, y2), (x3, y3)))
+            radii.append(radius)
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawRoundedTrianglesBatch(vertices, radii, colors, alpha=alphas)
+
+    def DrawRoundedTrianglesOutline(self, items):
+        """
+        Versione facile di DrawRoundedTrianglesOutlineBatch. Stessa nota
+        sulla rotazione di DrawTriangles (ruotata sulla CPU prima del
+        batch).
+
+        items: iterable di tuple
+            (x1, y1, x2, y2, x3, y3, radius, thickness=1.0,
+             color=(255,255,255,255), rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        vertices, radii, thicknesses, colors, alphas = [], [], [], [], []
+        for raw in items:
+            (x1, y1, x2, y2, x3, y3, radius, thickness, color,
+             rotation, alpha) = self._pad_item(
+                raw, 7, (1.0, (255, 255, 255, 255), 0.0, 255)
+            )
+            if rotation != 0.0:
+                cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+                cs, sn = self._cos_sin_deg(rotation)
+                dx1, dy1 = x1 - cx, y1 - cy
+                dx2, dy2 = x2 - cx, y2 - cy
+                dx3, dy3 = x3 - cx, y3 - cy
+                x1, y1 = cx + dx1*cs - dy1*sn, cy + dx1*sn + dy1*cs
+                x2, y2 = cx + dx2*cs - dy2*sn, cy + dx2*sn + dy2*cs
+                x3, y3 = cx + dx3*cs - dy3*sn, cy + dx3*sn + dy3*cs
+            vertices.append(((x1, y1), (x2, y2), (x3, y3)))
+            radii.append(radius)
+            thicknesses.append(thickness)
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawRoundedTrianglesOutlineBatch(vertices, radii, colors,
+                                              thickness=thicknesses,
+                                              alpha=alphas)
+
+    def DrawEllipses(self, items):
+        """
+        Versione facile di DrawEllipsesBatch. NOTA: come DrawEllipsesBatch,
+        il path GPU disegna un'ellisse esatta via SDF — qui non esiste il
+        parametro `segments` (ha senso solo per DrawEllipse/DrawCircle,
+        path CPU poligonale).
+
+        items: iterable di tuple
+            (cx, cy, rx, ry, color=(255,255,255,255), rotation=0.0,
+             alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        centers, radii, colors, rotations, alphas = [], [], [], [], []
+        for raw in items:
+            cx, cy, rx, ry, color, rotation, alpha = self._pad_item(
+                raw, 4, ((255, 255, 255, 255), 0.0, 255)
+            )
+            centers.append((cx, cy))
+            radii.append((rx, ry))
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawEllipsesBatch(centers, radii, colors,
+                               alpha=alphas, rotation=rotations)
+
+    def DrawCircles(self, items):
+        """
+        Versione facile di DrawCirclesBatch.
+
+        items: iterable di tuple
+            (cx, cy, r, color=(255,255,255,255), alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        centers, radii, colors, alphas = [], [], [], []
+        for raw in items:
+            cx, cy, r, color, alpha = self._pad_item(
+                raw, 3, ((255, 255, 255, 255), 255)
+            )
+            centers.append((cx, cy))
+            radii.append(r)
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawCirclesBatch(centers, radii, colors, alpha=alphas)
+
+    def DrawEllipsesOutline(self, items):
+        """
+        Versione facile di DrawEllipsesOutlineBatch.
+
+        items: iterable di tuple
+            (cx, cy, rx, ry, thickness=1.0, color=(255,255,255,255),
+             rotation=0.0, alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        centers, radii, thicknesses, colors, rotations, alphas = \
+            [], [], [], [], [], []
+        for raw in items:
+            cx, cy, rx, ry, thickness, color, rotation, alpha = self._pad_item(
+                raw, 4, (1.0, (255, 255, 255, 255), 0.0, 255)
+            )
+            centers.append((cx, cy))
+            radii.append((rx, ry))
+            thicknesses.append(thickness)
+            colors.append(color)
+            rotations.append(rotation)
+            alphas.append(alpha)
+        self.DrawEllipsesOutlineBatch(centers, radii, thickness=thicknesses,
+                                      colors=colors, alpha=alphas,
+                                      rotation=rotations)
+
+    def DrawCirclesOutline(self, items):
+        """
+        Versione facile di DrawCircleOutlineBatch.
+
+        items: iterable di tuple
+            (cx, cy, r, thickness=1.0, color=(255,255,255,255), alpha=255)
+        """
+        items = list(items)
+        if not items:
+            return
+        centers, radii, thicknesses, colors, alphas = [], [], [], [], []
+        for raw in items:
+            cx, cy, r, thickness, color, alpha = self._pad_item(
+                raw, 3, (1.0, (255, 255, 255, 255), 255)
+            )
+            centers.append((cx, cy))
+            radii.append(r)
+            thicknesses.append(thickness)
+            colors.append(color)
+            alphas.append(alpha)
+        self.DrawCircleOutlineBatch(centers, radii, thickness=thicknesses,
+                                    colors=colors, alpha=alphas)
+
+    def DrawBezierCurves(self, items, segments=None, smooth=True, alpha=255):
+        """
+        Versione facile di DrawBezierCurvesBatch. NOTA: `segments`/`smooth`
+        controllano la tassellazione e — come nella funzione Batch
+        sottostante — si applicano a TUTTE le curve del batch, non sono
+        quindi per-item; lo stesso vale per `alpha`, qui globale per
+        l'intero batch.
+
+        items: iterable di tuple
+            (p0, p1, p2, thickness=2.0, color=(255,255,255,255),
+             rotation=0.0)
+        p0/p1/p2 sono coppie (x, y).
+        """
+        items = list(items)
+        if not items:
+            return
+        p0s, p1s, p2s, thicknesses, colors = [], [], [], [], []
+        for raw in items:
+            p0, p1, p2, thickness, color, rotation = self._pad_item(
+                raw, 3, (2.0, (255, 255, 255, 255), 0.0)
+            )
+            if rotation != 0.0:
+                ocx = (p0[0] + p1[0] + p2[0]) / 3.0
+                ocy = (p0[1] + p1[1] + p2[1]) / 3.0
+                cs, sn = self._cos_sin_deg(rotation)
+
+                def _rot(p, ocx=ocx, ocy=ocy, cs=cs, sn=sn):
+                    dx, dy = p[0] - ocx, p[1] - ocy
+                    return (ocx + dx * cs - dy * sn, ocy + dx * sn + dy * cs)
+
+                p0, p1, p2 = _rot(p0), _rot(p1), _rot(p2)
+            p0s.append(p0); p1s.append(p1); p2s.append(p2)
+            thicknesses.append(thickness)
+            colors.append(color)
+        self.DrawBezierCurvesBatch(p0s, p1s, p2s, thickness=thicknesses,
+                                   colors=colors, segments=segments,
+                                   smooth=smooth, alpha=alpha)
+
+    def DrawSprites(self, items):
+        """
+        Alias 'facile' — nome coerente con le altre wrapper (senza
+        suffisso Batch) di DrawSpritesBatch, che già accetta una lista di
+        tuple così com'è.
+
+        items: iterable di tuple
+            (x, y, w, h, rot, u0, v0, u1, v1, alpha)
+        """
+        self.DrawSpritesBatch(items)
+
+    def DrawTexts(self, items):
+        """
+        Alias 'facile' — nome coerente con le altre wrapper di
+        DrawTextBatch, che già accetta una lista di tuple così com'è.
+
+        items: iterable di tuple
+            (text, x, y, font, size, color, alpha, rotation)
+        """
+        self.DrawTextBatch(items)
 
 #AGGANCIAMENTI
 DRAW.Point = Point
